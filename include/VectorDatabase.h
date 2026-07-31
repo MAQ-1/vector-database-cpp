@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "VectorRecord.h"
+#include "SearchResult.h"
 
 class VectorDatabase
 {
@@ -27,6 +28,13 @@ public:
   
     // It means this function promises not to modify the database.
      void display() const;
+
+    //  KNN 
+
+    std::vector<SearchResult> knnSearch(
+    const std::vector<float>& query,
+    int k
+  );
 };
 
 #endif

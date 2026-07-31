@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <sstream>
+#include "SearchResult.h"
 
 void VectorDatabase::insert(const VectorRecord &record)
 {
@@ -116,7 +117,7 @@ void VectorDatabase::saveToFile(const std::string &filename) const
 
 // load the file
 
-void VectorDatabase::loadFromFile(const std::string& filename)
+void VectorDatabase::loadFromFile(const std::string &filename)
 {
     std::ifstream file(filename);
 
@@ -161,4 +162,42 @@ void VectorDatabase::loadFromFile(const std::string& filename)
     }
 
     file.close();
+}
+
+// KNN search implementation
+
+std::vector<SearchResult> VectorDatabase::knnSearch(
+    const std::vector<float>& query,
+    int k)
+{
+    // Stores each record with its similarity score.
+    std::vector<SearchResult> scoredRecords;
+
+    // Compute similarity for every record.
+    for (const auto& record : records)
+    {
+        float similarity = Similarity::cosineSimilarity(query, record.embedding);
+
+        scoredRecords.push_back({record, similarity});
+    }
+
+    // Sort by similarity (highest first).
+    std::sort(
+        scoredRecords.begin(),
+        scoredRecords.end(),
+        [](const SearchResult& a, const SearchResult& b)
+        {
+            return a.score > b.score;
+        });
+
+    // Stores the final Top-K results.
+    std::vector<SearchResult> result;
+
+    // Copy the first k results.
+    for (int i = 0; i < k && i < scoredRecords.size(); i++)
+    {
+        result.push_back(scoredRecords[i]);
+    }
+
+    return result;
 }
