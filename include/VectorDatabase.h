@@ -15,6 +15,15 @@ public:
     void remove(int id);
 
     VectorRecord search(const std::vector<float>& query);
+       
+    // save the database to a file
+    // Saving only reads the database.
+    void saveToFile(const std::string& filename) const;
+
+
+//   load the database from a file
+//    Loading changes the database.
+    void loadFromFile(const std::string& filename);
   
     // It means this function promises not to modify the database.
      void display() const;

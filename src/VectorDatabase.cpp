@@ -3,6 +3,8 @@
 #include <iostream>
 #include <algorithm>
 #include <stdexcept>
+#include <fstream>
+#include <sstream>
 
 void VectorDatabase::insert(const VectorRecord &record)
 {
@@ -34,8 +36,6 @@ void VectorDatabase::display() const
 
 // Remove a record by its ID.
 
-
-
 void VectorDatabase::remove(int id)
 {
     records.erase(
@@ -49,7 +49,7 @@ void VectorDatabase::remove(int id)
         records.end());
 }
 
-VectorRecord VectorDatabase::search(const std::vector<float>& query)
+VectorRecord VectorDatabase::search(const std::vector<float> &query)
 {
     // Check if the database is empty
     if (records.empty())
@@ -81,4 +81,84 @@ VectorRecord VectorDatabase::search(const std::vector<float>& query)
 
     // Return the most similar record found
     return bestRecord;
+}
+
+// save the database to a file sirf read krega
+void VectorDatabase::saveToFile(const std::string &filename) const
+{
+    std::ofstream file(filename);
+
+    //  check if the file is open
+    if (!file.is_open())
+    {
+        throw std::runtime_error("Unable to open file for writing.");
+    }
+
+    // loop to store every file
+    for (const auto &record : records)
+    {
+        file << record.id << "|";
+        //  for loop for embedding in float
+        for (size_t i = 0; i < record.embedding.size(); i++)
+        {
+            file << record.embedding[i];
+
+            if (i != record.embedding.size() - 1)
+            {
+                file << ",";
+            }
+        }
+        file << "|" << record.metadata << std::endl;
+    }
+
+    file.close();
+}
+
+// load the file
+
+void VectorDatabase::loadFromFile(const std::string& filename)
+{
+    std::ifstream file(filename);
+
+    if (!file.is_open())
+    {
+        throw std::runtime_error("Unable to open file for reading.");
+    }
+
+    records.clear(); // Clear existing records before loading
+
+    std::string line;
+
+    while (std::getline(file, line))
+    {
+        std::stringstream ss(line);
+
+        std::string idStr;
+        std::string embeddingStr;
+        std::string metadata;
+
+        // Split the line into three parts
+        std::getline(ss, idStr, '|');
+        std::getline(ss, embeddingStr, '|');
+        std::getline(ss, metadata);
+
+        // Convert ID from string to int
+        int id = std::stoi(idStr);
+
+        // Parse embedding
+        std::vector<float> embedding;
+        std::stringstream embeddingStream(embeddingStr);
+
+        std::string value;
+
+        while (std::getline(embeddingStream, value, ','))
+        {
+            embedding.push_back(std::stof(value));
+        }
+
+        // Create VectorRecord and add to database
+        records.emplace_back(id, embedding, metadata);
+    }
+
+    file.close();
 }
