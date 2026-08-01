@@ -4,6 +4,7 @@
 #include <vector>
 #include "VectorRecord.h"
 #include "SearchResult.h"
+#include "Metric.h"
 
 class VectorDatabase
 {
@@ -33,7 +34,8 @@ public:
 
     std::vector<SearchResult> knnSearch(
     const std::vector<float>& query,
-    int k
+    int k,
+    Metric metric
   );
 };
 

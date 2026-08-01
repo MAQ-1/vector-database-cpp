@@ -3,7 +3,7 @@
 #include <algorithm>
 #include "VectorDatabase.h"
 #include "VectorRecord.h"
-
+#include "Metric.h"
 using namespace std;
 int main()
 {
@@ -23,26 +23,37 @@ int main()
     db.display();
 
     // Query vector
-    std::vector<float> query = {1.0f, 2.0f, 3.0f};
-
+   std::vector<float> query = {1.0f, 2.0f, 3.0f};
 int k = 3;
 
-std::vector<SearchResult> nearest = db.knnSearch(query, k);
-
-std::cout << "\n===== Top " << k << " Results =====\n\n";
-
-for (const auto& result : nearest)
+std::vector<Metric> metrics =
 {
-    std::cout << "ID: " << result.record.id << '\n';
-    std::cout << "Similarity: " << result.score << '\n';
-    std::cout << "Metadata: " << result.record.metadata << '\n';
+    Metric::COSINE,
+    Metric::EUCLIDEAN,
+    Metric::DOT_PRODUCT
+};
 
-    std::cout << "Embedding: ";
+std::vector<std::string> names =
+{
+    "Cosine Similarity",
+    "Euclidean Distance",
+    "Dot Product"
+};
 
-    for (float value : result.record.embedding)
-        std::cout << value << " ";
+for (int i = 0; i < metrics.size(); i++)
+{
+    std::cout << "\n=============================\n";
+    std::cout << names[i] << '\n';
+    std::cout << "=============================\n\n";
 
-    std::cout << "\n------------------------\n";
+    auto nearest = db.knnSearch(query, k, metrics[i]);
+
+    for (const auto& result : nearest)
+    {
+        std::cout << "ID: " << result.record.id << '\n';
+        std::cout << "Score: " << result.score << '\n';
+        std::cout << "Metadata: " << result.record.metadata << "\n\n";
+    }
 }
 
     return 0;

@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include "SearchResult.h"
+#include "Metric.h"
 
 void VectorDatabase::insert(const VectorRecord &record)
 {
@@ -167,29 +168,59 @@ void VectorDatabase::loadFromFile(const std::string &filename)
 // KNN search implementation
 
 std::vector<SearchResult> VectorDatabase::knnSearch(
-    const std::vector<float>& query,
-    int k)
+    const std::vector<float> &query,
+    int k,
+    Metric metric)
 {
     // Stores each record with its similarity score.
     std::vector<SearchResult> scoredRecords;
 
     // Compute similarity for every record.
-    for (const auto& record : records)
+    for (const auto &record : records)
     {
-        float similarity = Similarity::cosineSimilarity(query, record.embedding);
+        float score = 0.0f;
 
-        scoredRecords.push_back({record, similarity});
+        switch (metric)
+        {
+        case Metric::COSINE:
+            score = Similarity::cosineSimilarity(query, record.embedding);
+            break;
+        case Metric::EUCLIDEAN:
+            score = Similarity::euclideanDistance(query, record.embedding);
+            break;
+        case Metric::DOT_PRODUCT:
+            score = Similarity::dotproduct(query, record.embedding);
+            break;
+        default:
+            throw std::invalid_argument("Unsupported metric type.");
+        }
+
+        scoredRecords.push_back({record, score});
     }
 
     // Sort by similarity (highest first).
-    std::sort(
-        scoredRecords.begin(),
-        scoredRecords.end(),
-        [](const SearchResult& a, const SearchResult& b)
-        {
-            return a.score > b.score;
-        });
-
+    if (metric == Metric::EUCLIDEAN)
+    {
+        // Smaller distance is better.
+        std::sort(
+            scoredRecords.begin(),
+            scoredRecords.end(),
+            [](const SearchResult &a, const SearchResult &b)
+            {
+                return a.score < b.score;
+            });
+    }
+    else
+    {
+        // Larger similarity score is better.
+        std::sort(
+            scoredRecords.begin(),
+            scoredRecords.end(),
+            [](const SearchResult &a, const SearchResult &b)
+            {
+                return a.score > b.score;
+            });
+    }
     // Stores the final Top-K results.
     std::vector<SearchResult> result;
 
