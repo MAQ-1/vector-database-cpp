@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <sstream>
+#include <queue>
 #include "SearchResult.h"
 #include "Metric.h"
 
@@ -53,36 +54,14 @@ void VectorDatabase::remove(int id)
 
 VectorRecord VectorDatabase::search(const std::vector<float> &query)
 {
-    // Check if the database is empty
-    if (records.empty())
+   auto result = knnSearch(query, 1, Metric::EUCLIDEAN);
+
+    if (result.empty())
     {
-        throw std::runtime_error("Database is empty.");
+        throw std::runtime_error("No matching records found.");
     }
 
-    // Assume the first record is the best match initially
-    VectorRecord bestRecord = records[0];
-
-    // Calculate the similarity score of the first record
-    double bestScore =
-        Similarity::cosineSimilarity(query, bestRecord.embedding);
-
-    // Compare the query with all remaining records
-    for (size_t i = 1; i < records.size(); i++)
-    {
-        // Calculate similarity of the current record
-        double currentScore =
-            Similarity::cosineSimilarity(query, records[i].embedding);
-
-        // If the current record is more similar, update the best match
-        if (currentScore > bestScore)
-        {
-            bestScore = currentScore;
-            bestRecord = records[i];
-        }
-    }
-
-    // Return the most similar record found
-    return bestRecord;
+    return result[0].record;
 }
 
 // save the database to a file sirf read krega
@@ -165,19 +144,30 @@ void VectorDatabase::loadFromFile(const std::string &filename)
     file.close();
 }
 
-// KNN search implementation
+
+
+// KNN representation with sort
+
 
 std::vector<SearchResult> VectorDatabase::knnSearch(
-    const std::vector<float> &query,
+    const std::vector<float>& query,
     int k,
-    Metric metric)
+    Metric metric,
+    const std::string& metadataFilter)
 {
-    // Stores each record with its similarity score.
+    // Stores every record along with its score.
     std::vector<SearchResult> scoredRecords;
 
-    // Compute similarity for every record.
-    for (const auto &record : records)
+    // Calculate score for every record.
+    for (const auto& record : records)
     {
+        // Skip records that don't match the metadata filter.
+        if (!metadataFilter.empty() &&
+            record.metadata != metadataFilter)
+        {
+            continue;
+        }
+
         float score = 0.0f;
 
         switch (metric)
@@ -185,49 +175,167 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
         case Metric::COSINE:
             score = Similarity::cosineSimilarity(query, record.embedding);
             break;
+
         case Metric::EUCLIDEAN:
             score = Similarity::euclideanDistance(query, record.embedding);
             break;
+
         case Metric::DOT_PRODUCT:
             score = Similarity::dotproduct(query, record.embedding);
             break;
+
         default:
-            throw std::invalid_argument("Unsupported metric type.");
+            throw std::invalid_argument("Unsupported metric.");
         }
 
         scoredRecords.push_back({record, score});
     }
 
-    // Sort by similarity (highest first).
+    // Sort according to the selected metric.
     if (metric == Metric::EUCLIDEAN)
     {
-        // Smaller distance is better.
         std::sort(
             scoredRecords.begin(),
             scoredRecords.end(),
-            [](const SearchResult &a, const SearchResult &b)
+            [](const SearchResult& a, const SearchResult& b)
             {
                 return a.score < b.score;
             });
     }
     else
     {
-        // Larger similarity score is better.
         std::sort(
             scoredRecords.begin(),
             scoredRecords.end(),
-            [](const SearchResult &a, const SearchResult &b)
+            [](const SearchResult& a, const SearchResult& b)
             {
                 return a.score > b.score;
             });
     }
-    // Stores the final Top-K results.
+
+    // Keep only the Top-K results.
     std::vector<SearchResult> result;
 
-    // Copy the first k results.
-    for (int i = 0; i < k && i < scoredRecords.size(); i++)
+    for (int i = 0;
+         i < k && i < static_cast<int>(scoredRecords.size());
+         i++)
     {
         result.push_back(scoredRecords[i]);
+    }
+
+    return result;
+}
+
+
+
+
+
+// KNN search implementation with heap 
+
+std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
+    const std::vector<float> &query,
+    int k,
+    Metric metric,
+    const std::string &metadataFilter)
+{
+    // Min Heap:
+    // Stores only the Top-K search results.
+    // The smallest score is always at the top.
+    std::priority_queue<
+        SearchResult,
+        std::vector<SearchResult>,
+        CompareSearchResult> heap;
+
+    // Traverse every record in the database.
+    for (const auto &record : records)
+    {
+        // Skip records whose metadata does not match the filter.
+        // If metadataFilter is empty, all records are searched.
+        if (!metadataFilter.empty() &&
+            record.metadata != metadataFilter)
+        {
+            continue;
+        }
+
+        float score = 0.0f;
+
+        // Compute similarity/distance based on the selected metric.
+        switch (metric)
+        {
+        case Metric::COSINE:
+            score = Similarity::cosineSimilarity(query, record.embedding);
+            break;
+
+        case Metric::EUCLIDEAN:
+            score = Similarity::euclideanDistance(query, record.embedding);
+            break;
+
+        case Metric::DOT_PRODUCT:
+            score = Similarity::dotproduct(query, record.embedding);
+            break;
+
+        default:
+            throw std::invalid_argument("Unsupported metric.");
+        }
+
+        // Create the current search result.
+        SearchResult current{record, score};
+
+        // If heap contains fewer than K elements,
+        // simply insert the current result.
+        if (heap.size() < k)
+        {
+            heap.push(current);
+        }
+        else
+        {
+            // Decide whether the current result is better
+            // than the weakest result currently in the heap.
+
+            bool shouldReplace = false;
+
+            if (metric == Metric::EUCLIDEAN)
+            {
+                // For Euclidean distance:
+                // Smaller distance is better.
+                shouldReplace = current.score < heap.top().score;
+            }
+            else
+            {
+                // For Cosine Similarity and Dot Product:
+                // Larger score is better.
+                shouldReplace = current.score > heap.top().score;
+            }
+
+            // Replace the weakest result if the current one is better.
+            if (shouldReplace)
+            {
+                heap.pop();
+                heap.push(current);
+            }
+        }
+    }
+
+    // Stores the final Top-K search results.
+    std::vector<SearchResult> result;
+
+    // Extract all elements from the heap.
+    // Since it is a min heap, the weakest result comes out first.
+    while (!heap.empty())
+    {
+        result.push_back(heap.top());
+        heap.pop();
+    }
+
+    // Reverse only for similarity metrics.
+    // Heap returns:
+    // Smallest -> Largest
+    //
+    // We want:
+    // Largest -> Smallest
+    if (metric != Metric::EUCLIDEAN)
+    {
+        std::reverse(result.begin(), result.end());
     }
 
     return result;

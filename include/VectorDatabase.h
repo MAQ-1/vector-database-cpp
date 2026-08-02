@@ -35,8 +35,16 @@ public:
     std::vector<SearchResult> knnSearch(
     const std::vector<float>& query,
     int k,
-    Metric metric
+    Metric metric,
+    const std::string& metadataFilter=""
   );
+
+  std::vector<SearchResult> knnSearchOptimized(
+    const std::vector<float>& query,
+    int k,
+    Metric metric,
+    const std::string& metadataFilter = ""
+);
 };
 
 #endif
