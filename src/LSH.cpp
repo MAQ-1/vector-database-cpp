@@ -1,0 +1,81 @@
+#include "LSH.h"
+#include<iostream>
+#include "Similarity.h"
+
+int LSH::hash(const std::vector<float>& embedding)
+{
+    // Compute the sum of all dimensions.
+    float sum = 0.0f;
+
+    for (float value : embedding)
+    {
+        sum += value;
+    }
+
+    // Size of each bucket.
+    const int bucketSize = 10;
+
+    // Return the bucket number. helpt o return the interger 
+    return static_cast<int>(sum / bucketSize);
+}
+
+void LSH::insert(const VectorRecord& record)
+{
+    // Compute the bucket number for this vector.
+    int bucket = hash(record.embedding);
+
+    // Insert the record into the corresponding bucket.
+    buckets[bucket].push_back(record);
+}
+
+void LSH::display() const
+{
+    std::cout << "\n===== LSH Buckets =====\n";
+
+    // Traverse every bucket in the hash table.
+    for (const auto& bucket : buckets)
+    {
+        std::cout << "Bucket " << bucket.first << std::endl;
+
+        // Traverse every record inside the bucket.
+        for (const auto& record : bucket.second)
+        {
+            std::cout << "  ID: " << record.id
+                      << "  Metadata: " << record.metadata
+                      << std::endl;
+        }
+
+        std::cout << "------------------------\n";
+    }
+}
+
+VectorRecord LSH::search(const std::vector<float>& query){
+    // compute the bucket number for the query vector
+    int bucket = hash(query);
+
+    // check the bucket in hashmap
+
+    if(buckets.find(bucket)==buckets.end()){
+      throw std::runtime_error("No records found in the corresponding bucket.");
+    } 
+
+    // Get all vectors inside the bucket.
+    const auto& records = buckets[bucket];
+
+    VectorRecord bestRecord = records[0];
+    float bestDistance =
+    Similarity::euclideanDistance(query, bestRecord.embedding);
+
+    for(size_t i =1;i<records.size();i++){
+        float distance= Similarity::euclideanDistance(
+            query,
+            records[i].embedding
+        );
+
+        if(distance < bestDistance){
+            bestDistance = distance;
+            bestRecord = records[i];
+        }
+    }
+    return bestRecord;
+}
