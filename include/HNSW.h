@@ -1,19 +1,47 @@
 #pragma once
-
+#include <queue>
+#include <utility>
 #include <vector>
 #include "HNSWNode.h"
+#include <unordered_set>
+
 
 class HNSW
 {
+    using Candidate = std::pair<float, HNSWNode*>;
+     static constexpr int M = 4;
 private:
- // Stores all nodes in the graph.
-   std::vector<HNSWNode*> nodes;
-//   to connect the node to eachother
-   void connect(HNSWNode* node1, HNSWNode* node2);
+    std::vector<HNSWNode*> nodes;
 
-//    to find the nearest neighbor of a given node
-   HNSWNode* findNearestNeighbor(HNSWNode* newnode,int k);
+    HNSWNode* entryPoint;
+
+    void connect(HNSWNode* node1, HNSWNode* node2);
+
+    std::vector<HNSWNode*> findNearestNeighbors(
+        HNSWNode* newNode,
+        int k);
+
+    std::vector<HNSWNode*> efSearch(
+        HNSWNode* startNode,
+        const std::vector<float>& query,
+        int level,
+        int ef);
+
+    int generateRandomLevel();
+
+    void pruneNeighbors(HNSWNode* node, int level);
+
 public:
-//  creating graph
-  void insert(const VectorRecord& record);
+    HNSW();
+
+    void insert(const VectorRecord& record);
+    HNSWNode* getEntryPoint() const;
+    HNSWNode* greedySearch(
+        HNSWNode* startNode,
+        const std::vector<float>& query,
+        int level);
+
+        VectorRecord search(
+    const std::vector<float>& query
+);
 };
