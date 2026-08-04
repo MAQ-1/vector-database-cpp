@@ -1,37 +1,49 @@
 #include <iostream>
-#include "HNSW.h"
+#include "VectorDatabase.h"
 
 int main()
 {
-    HNSW index;
+    VectorDatabase db;
 
-    VectorRecord r1(1, {1.0f, 2.0f}, "A");
-    VectorRecord r2(2, {2.0f, 3.0f}, "B");
-    VectorRecord r3(3, {8.0f, 8.0f}, "C");
-    VectorRecord r4(4, {7.0f, 9.0f}, "D");
-    VectorRecord r5(5, {1.5f, 2.5f}, "E");
+for (int i = 0; i < 10000; i++)
+{
+    std::vector<float> embedding = {
+        static_cast<float>(rand() % 1000),
+        static_cast<float>(rand() % 1000)
+    };
 
-    index.insert(r1);
-    index.insert(r2);
-    index.insert(r3);
-    index.insert(r4);
-    index.insert(r5);
+    db.insert(VectorRecord(i, embedding, "Random"));
+}
 
-  std::vector<float> query = {100.0f, 100.0f};
+    std::vector<float> query = {8.1f,8.2f};
 
-    HNSWNode* result =
-        index.greedySearch(
-            index.getEntryPoint(),
-            query,
-            0);
+    // Benchmark
+    Benchmark result = db.benchmark(query);
 
-    if(result != nullptr)
-    {
-        std::cout
-            << "Nearest Node ID : "
-            << result->record.id
-            << std::endl;
-    }
+    std::cout << "\n========== Benchmark ==========\n";
+    std::cout << "Brute Force : " << result.bruteForceTime << " us\n";
+    std::cout << "KD-Tree     : " << result.kdTreeTime << " us\n";
+    std::cout << "LSH         : " << result.lshTime << " us\n";
+    std::cout << "HNSW        : " << result.hnswTime << " us\n";
+
+    // Verify correctness
+    std::cout << "\n========== Search Results ==========\n";
+
+    std::cout << "Brute Force : "
+              << db.search(query, SearchAlgorithm::BRUTE_FORCE).id
+              << '\n';
+
+    std::cout << "KD-Tree     : "
+              << db.search(query, SearchAlgorithm::KD_TREE).id
+              << '\n';
+
+    std::cout << "LSH         : "
+              << db.search(query, SearchAlgorithm::LSH).id
+              << '\n';
+
+    std::cout << "HNSW        : "
+              << db.search(query, SearchAlgorithm::HNSW).id
+              << '\n';
 
     return 0;
 }

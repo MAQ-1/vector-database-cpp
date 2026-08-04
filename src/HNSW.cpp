@@ -49,9 +49,13 @@ void HNSW::insert(const VectorRecord &record)
             efConstruction);
 
     // Connect the new node to every selected neighbor.
-    for (HNSWNode *neighbor : nearestNeighbors)
+    const int M = 4;
+
+    for (int i = 0;
+         i < nearestNeighbors.size() && i < M;
+         i++)
     {
-        connect(newNode, neighbor);
+        connect(newNode, nearestNeighbors[i]);
     }
 
     // Add the new node to the graph.
@@ -151,12 +155,12 @@ void HNSW::connect(HNSWNode *node1, HNSWNode *node2)
     }
 }
 
-HNSWNode* HNSW::getEntryPoint() const
+HNSWNode *HNSW::getEntryPoint() const
 {
     return entryPoint;
 }
 
-void HNSW::pruneNeighbors(HNSWNode* node, int level)
+void HNSW::pruneNeighbors(HNSWNode *node, int level)
 {
     // Already within the limit.
     if (node->neighbors[level].size() <= M)
@@ -190,7 +194,7 @@ void HNSW::pruneNeighbors(HNSWNode* node, int level)
         node->neighbors[level].begin() + farthestIndex);
 }
 
-VectorRecord HNSW::search(const std::vector<float>& query)
+VectorRecord HNSW::search(const std::vector<float> &query)
 {
     // Empty graph.
     if (nodes.empty())
@@ -199,7 +203,7 @@ VectorRecord HNSW::search(const std::vector<float>& query)
     }
 
     // Step 1: Navigate quickly to the correct region.
-    HNSWNode* current = entryPoint;
+    HNSWNode *current = entryPoint;
 
     for (int level = entryPoint->level; level >= 0; level--)
     {
@@ -207,18 +211,18 @@ VectorRecord HNSW::search(const std::vector<float>& query)
     }
 
     // Step 2: Explore around that region.
-    const int efSearchValue = 10;
+    const int efSearchValue = 200;
 
-    std::vector<HNSWNode*> candidates =
+    std::vector<HNSWNode *> candidates =
         efSearch(current, query, 0, efSearchValue);
 
     // Step 3: Return the closest candidate.
     if (candidates.empty())
-{
-    return current->record;
-}
+    {
+        return current->record;
+    }
 
-return candidates[0]->record;
+    return candidates[0]->record;
 }
 
 std::vector<HNSWNode *> HNSW::efSearch(
@@ -274,6 +278,19 @@ std::vector<HNSWNode *> HNSW::efSearch(
             candidates.push({distance, neighbor});
         }
     }
+
+    std::sort(
+        result.begin(),
+        result.end(),
+        [&](HNSWNode *a, HNSWNode *b)
+        {
+            return Similarity::euclideanDistance(
+                       a->record.embedding,
+                       query) <
+                   Similarity::euclideanDistance(
+                       b->record.embedding,
+                       query);
+        });
 
     return result;
 }
