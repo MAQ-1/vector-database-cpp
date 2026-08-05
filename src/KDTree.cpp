@@ -1,7 +1,7 @@
 #include "KDNode.h"
 #include "KDTree.h"
 #include <iostream>
-#include <cfloat> 
+#include <cfloat>
 #include <stdexcept>
 #include "Similarity.h"
 #include <cmath>
@@ -34,7 +34,7 @@ KDNode *KDTree::insert(
     }
 
     int axis = depth % record.embedding.size();
-    //   new node hai            // ye current node hai 
+    //   new node hai            // ye current node hai
     if (record.embedding[axis] < node->record.embedding[axis])
     {
         // Go to the left subtree.
@@ -86,10 +86,11 @@ void KDTree::display(KDNode *node) const
 }
 
 VectorRecord KDTree::nearestNeighbor(
-    const std::vector<float>&query
-){
-    // tree is empty 
-    if(root == nullptr){
+    const std::vector<float> &query)
+{
+    // tree is empty
+    if (root == nullptr)
+    {
         throw std::runtime_error("KD-Tree is empty.");
     }
 
@@ -106,11 +107,11 @@ VectorRecord KDTree::nearestNeighbor(
 // private recursive function to find nearest neighbor
 // Private recursive function to find the nearest neighbor.
 void KDTree::nearestNeighbor(
-    KDNode* node,
-    const std::vector<float>& query,
+    KDNode *node,
+    const std::vector<float> &query,
     int depth,
-    KDNode*& bestNode,
-    float& bestDistance)
+    KDNode *&bestNode,
+    float &bestDistance)
 {
     // Base Case:
     // If the current node is null, stop recursion.
@@ -123,8 +124,7 @@ void KDTree::nearestNeighbor(
     // and the current node.
     float distance = Similarity::euclideanDistance(
         query,
-        node->record.embedding
-    );
+        node->record.embedding);
 
     // If the current node is closer,
     // update the best node and best distance.
@@ -143,8 +143,8 @@ void KDTree::nearestNeighbor(
 
     // Determine which subtree is nearer
     // and which is farther from the query.
-    KDNode* nearChild;
-    KDNode* farChild;
+    KDNode *nearChild;
+    KDNode *farChild;
 
     if (query[axis] < node->record.embedding[axis])
     {
@@ -163,8 +163,7 @@ void KDTree::nearestNeighbor(
         query,
         depth + 1,
         bestNode,
-        bestDistance
-    );
+        bestDistance);
 
     // Distance from the query to the splitting plane.
     float planeDistance =
@@ -179,7 +178,203 @@ void KDTree::nearestNeighbor(
             query,
             depth + 1,
             bestNode,
-            bestDistance
-        );
+            bestDistance);
     }
+}
+
+// remov e
+
+KDNode *KDTree::findMin(
+    KDNode *node,
+    int targetDimension,
+    int depth)
+{
+    if (node == nullptr)
+    {
+        return nullptr;
+    }
+
+    int currentDimension = depth % node->record.embedding.size();
+
+    if (currentDimension == targetDimension)
+    {
+        if (node->left == nullptr)
+        {
+            return node;
+        }
+
+        return findMin(node->left, targetDimension, depth + 1);
+    }
+
+    KDNode *leftMin =
+        findMin(
+            node->left,
+            targetDimension,
+            depth + 1);
+
+    KDNode *rightMin =
+        findMin(
+            node->right,
+            targetDimension,
+            depth + 1);
+
+    // Return the node with the minimum value in the specified dimension.
+    KDNode *minimum = node;
+    if (leftMin != nullptr &&
+        leftMin->record.embedding[targetDimension] <
+            minimum->record.embedding[targetDimension])
+    {
+        minimum = leftMin;
+    }
+    if (rightMin != nullptr &&
+        rightMin->record.embedding[targetDimension] <
+            minimum->record.embedding[targetDimension])
+    {
+        minimum = rightMin;
+    }
+    return minimum;
+}
+
+KDNode *KDTree::findMax(
+    KDNode *node,
+    int targetDimension,
+    int depth)
+{
+    // Base Case
+    if (node == nullptr)
+    {
+        return nullptr;
+    }
+
+    int currentDimension =
+        depth % node->record.embedding.size();
+
+    // If the current splitting dimension matches
+    // the target dimension, maximum can only be
+    // in the current node or right subtree.
+    if (currentDimension == targetDimension)
+    {
+        if (node->right == nullptr)
+        {
+            return node;
+        }
+
+        return findMax(
+            node->right,
+            targetDimension,
+            depth + 1);
+    }
+
+    // Otherwise search both subtrees.
+    KDNode *leftMax =
+        findMax(
+            node->left,
+            targetDimension,
+            depth + 1);
+
+    KDNode *rightMax =
+        findMax(
+            node->right,
+            targetDimension,
+            depth + 1);
+
+    // Find the maximum among current, left and right.
+    KDNode *maximum = node;
+
+    if (leftMax != nullptr &&
+        leftMax->record.embedding[targetDimension] >
+            maximum->record.embedding[targetDimension])
+    {
+        maximum = leftMax;
+    }
+
+    if (rightMax != nullptr &&
+        rightMax->record.embedding[targetDimension] >
+            maximum->record.embedding[targetDimension])
+    {
+        maximum = rightMax;
+    }
+
+    return maximum;
+}
+
+// remove node by id
+KDNode* KDTree::removeNode(
+    KDNode* node,
+    int id,
+    int depth)
+{
+    // Base Case
+    if (node == nullptr)
+    {
+        return nullptr;
+    }
+
+    int currentDimension =
+        depth % node->record.embedding.size();
+
+    // Found the node to delete
+    if (node->record.id == id)
+    {
+        // Case 1: Leaf Node
+        if (node->left == nullptr &&
+            node->right == nullptr)
+        {
+            delete node;
+            return nullptr;
+        }
+
+        // Case 2: Right subtree exists
+        if (node->right != nullptr)
+        {
+            KDNode* replacement =
+                findMin(
+                    node->right,
+                    currentDimension,
+                    depth + 1);
+
+            node->record = replacement->record;
+
+            node->right =
+                removeNode(
+                    node->right,
+                    replacement->record.id,
+                    depth + 1);
+        }
+
+        // Case 3: Only left subtree exists
+        else
+        {
+            KDNode* replacement =
+                findMax(
+                    node->left,
+                    currentDimension,
+                    depth + 1);
+
+            node->record = replacement->record;
+
+            node->left =
+                removeNode(
+                    node->left,
+                    replacement->record.id,
+                    depth + 1);
+        }
+    }
+    else
+    {
+        // Since we only know the ID, search both subtrees.
+        node->left =
+            removeNode(
+                node->left,
+                id,
+                depth + 1);
+
+        node->right =
+            removeNode(
+                node->right,
+                id,
+                depth + 1);
+    }
+
+    return node;
 }

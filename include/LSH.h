@@ -15,6 +15,8 @@ public:
 void insert(const VectorRecord& record);
 void display() const;
 
+void remove(int id);
+
 VectorRecord search(
     const std::vector<float>& query
 );

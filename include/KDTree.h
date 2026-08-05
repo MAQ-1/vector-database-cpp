@@ -21,6 +21,21 @@ private:
         KDNode *&bestNode,
         float &bestDistance);
 
+    KDNode *findMin(
+        KDNode *node,
+        int targetDimension,
+        int depth);
+
+        KDNode* findMax(
+    KDNode* node,
+    int targetDimension,
+    int depth);
+
+    KDNode* removeNode(
+    KDNode* node,
+    int id,
+    int depth);
+
 public:
     // Constructor
     KDTree();
@@ -28,7 +43,11 @@ public:
     // Insert a new record into the KD-Tree.
     void insert(const VectorRecord &record);
     void display() const;
-
+    
+    void remove(int id)
+{
+    root = removeNode(root, id, 0);
+}
     VectorRecord nearestNeighbor(
         const std::vector<float> &query);
 };

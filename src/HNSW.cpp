@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib> // for rand()
 #include "HNSWNode.h"
+#include <stdexcept>
 HNSW::HNSW()
 {
     entryPoint = nullptr;
@@ -120,6 +121,13 @@ HNSWNode *HNSW::greedySearch(
     return current;
 }
 
+
+
+
+
+
+
+
 // connection neighbor
 void HNSW::connect(HNSWNode *node1, HNSWNode *node2)
 {
@@ -155,10 +163,21 @@ void HNSW::connect(HNSWNode *node1, HNSWNode *node2)
     }
 }
 
+
+
+
+
+
+
 HNSWNode *HNSW::getEntryPoint() const
 {
     return entryPoint;
 }
+
+
+
+
+
 
 void HNSW::pruneNeighbors(HNSWNode *node, int level)
 {
@@ -194,6 +213,11 @@ void HNSW::pruneNeighbors(HNSWNode *node, int level)
         node->neighbors[level].begin() + farthestIndex);
 }
 
+
+
+
+
+
 VectorRecord HNSW::search(const std::vector<float> &query)
 {
     // Empty graph.
@@ -224,6 +248,9 @@ VectorRecord HNSW::search(const std::vector<float> &query)
 
     return candidates[0]->record;
 }
+
+
+
 
 std::vector<HNSWNode *> HNSW::efSearch(
     HNSWNode *startNode,
@@ -295,6 +322,10 @@ std::vector<HNSWNode *> HNSW::efSearch(
     return result;
 }
 
+
+
+
+
 std::vector<HNSWNode *> HNSW::findNearestNeighbors(
     HNSWNode *newNode,
     int k)
@@ -343,4 +374,9 @@ int HNSW::generateRandomLevel()
     }
 
     return level;
+}
+
+void HNSW::remove(int id)
+{
+    // TODO
 }

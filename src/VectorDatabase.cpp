@@ -10,6 +10,8 @@
 #include "Metric.h"
 #include "Benchmark.h"
 #include <chrono>
+#include <random>
+
 void VectorDatabase::insert(const VectorRecord &record)
 {
     records.emplace_back(record);
@@ -44,10 +46,15 @@ void VectorDatabase::display() const
     }
 }
 
+void VectorDatabase::clear()
+{
+    records.clear();
+}
 // Remove a record by its ID.
 
 void VectorDatabase::remove(int id)
 {
+    // Remove from the records vector
     records.erase(
         std::remove_if(
             records.begin(),
@@ -57,6 +64,15 @@ void VectorDatabase::remove(int id)
                 return record.id == id;
             }),
         records.end());
+
+    // Remove from KD-Tree
+    kdTree.remove(id);
+
+    // Remove from LSH
+    lsh.remove(id);
+
+    // Remove from HNSW
+    hnsw.remove(id);
 }
 
 VectorRecord VectorDatabase::search(const std::vector<float> &query,
@@ -101,17 +117,15 @@ void VectorDatabase::saveToFile(const std::string &filename) const
 {
     std::ofstream file(filename);
 
-    //  check if the file is open
     if (!file.is_open())
     {
         throw std::runtime_error("Unable to open file for writing.");
     }
 
-    // loop to store every file
     for (const auto &record : records)
     {
         file << record.id << "|";
-        //  for loop for embedding in float
+
         for (size_t i = 0; i < record.embedding.size(); i++)
         {
             file << record.embedding[i];
@@ -121,14 +135,12 @@ void VectorDatabase::saveToFile(const std::string &filename) const
                 file << ",";
             }
         }
-        file << "|" << record.metadata << std::endl;
-    }
 
-    file.close();
+        file << "|" << record.metadata << '\n';
+    }
 }
 
 // load the file
-
 void VectorDatabase::loadFromFile(const std::string &filename)
 {
     std::ifstream file(filename);
@@ -138,7 +150,8 @@ void VectorDatabase::loadFromFile(const std::string &filename)
         throw std::runtime_error("Unable to open file for reading.");
     }
 
-    records.clear(); // Clear existing records before loading
+    // Clear existing records
+    clear();
 
     std::string line;
 
@@ -150,12 +163,12 @@ void VectorDatabase::loadFromFile(const std::string &filename)
         std::string embeddingStr;
         std::string metadata;
 
-        // Split the line into three parts
+        // Split the line
         std::getline(ss, idStr, '|');
         std::getline(ss, embeddingStr, '|');
         std::getline(ss, metadata);
 
-        // Convert ID from string to int
+        // Convert ID
         int id = std::stoi(idStr);
 
         // Parse embedding
@@ -169,23 +182,15 @@ void VectorDatabase::loadFromFile(const std::string &filename)
             embedding.push_back(std::stof(value));
         }
 
-        // Create VectorRecord and add to database
-        records.emplace_back(id, embedding, metadata);
-
+        // Create record
         VectorRecord record(id, embedding, metadata);
 
-        records.emplace_back(record);
-
-        kdTree.insert(record);
-
-        hnsw.insert(record);
-
-        lsh.insert(record);
+        // Insert into all indexes
+        insert(record);
     }
 
     file.close();
 }
-
 // KNN representation with sort
 
 std::vector<SearchResult> VectorDatabase::knnSearch(
@@ -378,58 +383,85 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
 }
 
 // BenchMark
-
 Benchmark VectorDatabase::benchmark(
     const std::vector<float> &query)
 {
     Benchmark result;
 
+    constexpr int ITERATIONS = 1000;
+
+    // ----------------------------
+    // Brute Force
+    // ----------------------------
     auto start = std::chrono::high_resolution_clock::now();
 
-    search(query, SearchAlgorithm::BRUTE_FORCE);
+    for (int i = 0; i < ITERATIONS; i++)
+    {
+        search(query, SearchAlgorithm::BRUTE_FORCE);
+    }
 
     auto end = std::chrono::high_resolution_clock::now();
 
     result.bruteForceTime =
         std::chrono::duration<double, std::micro>(
             end - start)
-            .count();
+            .count() / ITERATIONS;
 
-    // KDTree
+    // ----------------------------
+    // KD-Tree
+    // ----------------------------
     start = std::chrono::high_resolution_clock::now();
 
-    search(query, SearchAlgorithm::KD_TREE);
+    for (int i = 0; i < ITERATIONS; i++)
+    {
+        search(query, SearchAlgorithm::KD_TREE);
+    }
 
     end = std::chrono::high_resolution_clock::now();
 
     result.kdTreeTime =
         std::chrono::duration<double, std::micro>(
             end - start)
-            .count();
+            .count() / ITERATIONS;
 
+    // ----------------------------
     // LSH
+    // ----------------------------
     start = std::chrono::high_resolution_clock::now();
 
-    search(query, SearchAlgorithm::LSH);
+    for (int i = 0; i < ITERATIONS; i++)
+    {
+        search(query, SearchAlgorithm::LSH);
+    }
 
     end = std::chrono::high_resolution_clock::now();
 
     result.lshTime =
         std::chrono::duration<double, std::micro>(
             end - start)
-            .count();
+            .count() / ITERATIONS;
 
+    // ----------------------------
     // HNSW
+    // ----------------------------
     start = std::chrono::high_resolution_clock::now();
 
-    search(query, SearchAlgorithm::HNSW);
+    for (int i = 0; i < ITERATIONS; i++)
+    {
+        search(query, SearchAlgorithm::HNSW);
+    }
 
     end = std::chrono::high_resolution_clock::now();
 
     result.hnswTime =
         std::chrono::duration<double, std::micro>(
             end - start)
-            .count();
+            .count() / ITERATIONS;
 
     return result;
+}
+
+const std::vector<VectorRecord>& VectorDatabase::getRecords() const
+{
+    return records;
 }

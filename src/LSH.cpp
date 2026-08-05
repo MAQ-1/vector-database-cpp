@@ -1,6 +1,7 @@
 #include "LSH.h"
 #include<iostream>
 #include "Similarity.h"
+#include <algorithm>
 
 int LSH::hash(const std::vector<float>& embedding)
 {
@@ -78,4 +79,26 @@ VectorRecord LSH::search(const std::vector<float>& query){
         }
     }
     return bestRecord;
+}
+
+void LSH::remove(int id)
+{
+    for (auto it = buckets.begin(); it != buckets.end(); )
+    {
+        auto &records = it->second;
+
+        for (int i = 0; i < records.size(); i++)
+        {
+            if (records[i].id == id)
+            {
+                records.erase(records.begin() + i);
+                break;
+            }
+        }
+
+        if (records.empty())
+            it = buckets.erase(it);
+        else
+            ++it;
+    }
 }

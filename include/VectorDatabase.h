@@ -66,6 +66,10 @@ public:
 
     Benchmark benchmark(
         const std::vector<float> &query);
+
+        const std::vector<VectorRecord>& getRecords() const;
+
+        void clear();
 };
 
 #endif

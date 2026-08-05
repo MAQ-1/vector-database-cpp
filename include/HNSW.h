@@ -44,4 +44,7 @@ public:
         VectorRecord search(
     const std::vector<float>& query
 );
+
+void remove(int id);
+
 };
