@@ -5,7 +5,8 @@ enum class Metric
 {
     COSINE,
     EUCLIDEAN,
-    DOT_PRODUCT
+    DOT_PRODUCT,
+    MANHATTAN
 };
 
 #endif

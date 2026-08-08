@@ -228,6 +228,10 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
             score = Similarity::dotproduct(query, record.embedding);
             break;
 
+        case Metric::MANHATTAN:
+            score = Similarity::manhattanDistance(query, record.embedding);
+            break;
+
         default:
             throw std::invalid_argument("Unsupported metric.");
         }
@@ -236,7 +240,9 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
     }
 
     // Sort according to the selected metric.
-    if (metric == Metric::EUCLIDEAN)
+    // EUCLIDEAN and MANHATTAN are distance metrics: smaller score is better.
+    // COSINE and DOT_PRODUCT are similarity metrics: larger score is better.
+    if (metric == Metric::EUCLIDEAN || metric == Metric::MANHATTAN)
     {
         std::sort(
             scoredRecords.begin(),
@@ -278,14 +284,37 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
     Metric metric,
     const std::string &metadataFilter)
 {
-    // Min Heap:
-    // Stores only the Top-K search results.
-    // The smallest score is always at the top.
-    std::priority_queue<
-        SearchResult,
-        std::vector<SearchResult>,
-        CompareSearchResult>
-        heap;
+    // For distance metrics (EUCLIDEAN, MANHATTAN), smaller score is better.
+    // We must keep the K smallest distances seen so far.
+    // To do that efficiently, we maintain a MAX-heap on score:
+    //   heap.top() = the WORST (largest distance) of the current K.
+    //   A new candidate replaces heap.top() only if it is smaller.
+    //
+    // For similarity metrics (COSINE, DOT_PRODUCT), larger score is better.
+    // We must keep the K largest similarities seen so far.
+    // We maintain a MIN-heap on score:
+    //   heap.top() = the WORST (smallest similarity) of the current K.
+    //   A new candidate replaces heap.top() only if it is larger.
+    //
+    // CompareSearchResult is (a.score > b.score) → min-heap (smallest at top).
+    // For distance metrics we need the opposite: max-heap (largest at top).
+    // We declare a local max-heap comparator for that case.
+
+    const bool isDistanceMetric =
+        (metric == Metric::EUCLIDEAN || metric == Metric::MANHATTAN);
+
+    // Max-heap comparator: largest score at top.
+    // Used for distance metrics so heap.top() is always the worst (farthest) result.
+    struct MaxHeap
+    {
+        bool operator()(const SearchResult &a, const SearchResult &b) const
+        {
+            return a.score < b.score;
+        }
+    };
+
+    std::priority_queue<SearchResult, std::vector<SearchResult>, MaxHeap> distHeap;
+    std::priority_queue<SearchResult, std::vector<SearchResult>, CompareSearchResult> simHeap;
 
     // Traverse every record in the database.
     for (const auto &record : records)
@@ -315,67 +344,70 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
             score = Similarity::dotproduct(query, record.embedding);
             break;
 
+        case Metric::MANHATTAN:
+            score = Similarity::manhattanDistance(query, record.embedding);
+            break;
+
         default:
             throw std::invalid_argument("Unsupported metric.");
         }
 
-        // Create the current search result.
         SearchResult current{record, score};
 
-        // If heap contains fewer than K elements,
-        // simply insert the current result.
-        if (heap.size() < k)
+        if (isDistanceMetric)
         {
-            heap.push(current);
+            // Max-heap: heap.top() is the largest (worst) distance.
+            // Accept candidate if heap is not full yet,
+            // or if candidate is closer (smaller) than the current worst.
+            if (distHeap.size() < static_cast<size_t>(k))
+            {
+                distHeap.push(current);
+            }
+            else if (current.score < distHeap.top().score)
+            {
+                distHeap.pop();
+                distHeap.push(current);
+            }
         }
         else
         {
-            // Decide whether the current result is better
-            // than the weakest result currently in the heap.
-
-            bool shouldReplace = false;
-
-            if (metric == Metric::EUCLIDEAN)
+            // Min-heap: heap.top() is the smallest (worst) similarity.
+            // Accept candidate if heap is not full yet,
+            // or if candidate has higher similarity than the current worst.
+            if (simHeap.size() < static_cast<size_t>(k))
             {
-                // For Euclidean distance:
-                // Smaller distance is better.
-                shouldReplace = current.score < heap.top().score;
+                simHeap.push(current);
             }
-            else
+            else if (current.score > simHeap.top().score)
             {
-                // For Cosine Similarity and Dot Product:
-                // Larger score is better.
-                shouldReplace = current.score > heap.top().score;
-            }
-
-            // Replace the weakest result if the current one is better.
-            if (shouldReplace)
-            {
-                heap.pop();
-                heap.push(current);
+                simHeap.pop();
+                simHeap.push(current);
             }
         }
     }
 
-    // Stores the final Top-K search results.
     std::vector<SearchResult> result;
 
-    // Extract all elements from the heap.
-    // Since it is a min heap, the weakest result comes out first.
-    while (!heap.empty())
+    if (isDistanceMetric)
     {
-        result.push_back(heap.top());
-        heap.pop();
+        // Max-heap drains largest first. Reverse to get ascending order.
+        while (!distHeap.empty())
+        {
+            result.push_back(distHeap.top());
+            distHeap.pop();
+        }
+        // Drain order: largest → smallest. Reverse for smallest → largest.
+        std::reverse(result.begin(), result.end());
     }
-
-    // Reverse only for similarity metrics.
-    // Heap returns:
-    // Smallest -> Largest
-    //
-    // We want:
-    // Largest -> Smallest
-    if (metric != Metric::EUCLIDEAN)
+    else
     {
+        // Min-heap drains smallest first. Reverse to get descending order.
+        while (!simHeap.empty())
+        {
+            result.push_back(simHeap.top());
+            simHeap.pop();
+        }
+        // Drain order: smallest → largest. Reverse for largest → smallest.
         std::reverse(result.begin(), result.end());
     }
 
