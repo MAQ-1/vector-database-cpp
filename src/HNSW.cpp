@@ -397,5 +397,84 @@ int HNSW::generateRandomLevel()
 
 void HNSW::remove(int id)
 {
-    // TODO
+    // Step 1: Find the first node whose record.id matches.
+    HNSWNode* target = nullptr;
+    int targetIndex = -1;
+
+    for (int i = 0; i < static_cast<int>(nodes.size()); i++)
+    {
+        if (nodes[i]->record.id == id)
+        {
+            target = nodes[i];
+            targetIndex = i;
+            break;
+        }
+    }
+
+    // Step 2: Id not found — silently return, no side effects.
+    // Fallback: no error-handling convention for "not found" exists in the
+    // attached code (search() throws only on empty graph, not missing id),
+    // so silent return is used here.
+    if (target == nullptr)
+    {
+        return;
+    }
+
+    // Step 3: Remove target from every neighbor list in the graph.
+    // Iterate every remaining node A. For each level that A actually has
+    // (0..A->level inclusive), scan A's neighbor list and erase target.
+    // We use A->level as the bound — never target->level — because connect()
+    // links at levels 0..min(A->level, target->level), so target can appear
+    // in any of A's levels up to A's own cap.
+    for (HNSWNode* node : nodes)
+    {
+        if (node == target)
+        {
+            continue;
+        }
+
+        for (int lvl = 0; lvl <= node->level; lvl++)
+        {
+            std::vector<HNSWNode*>& nbrs = node->neighbors[lvl];
+            nbrs.erase(
+                std::remove(nbrs.begin(), nbrs.end(), target),
+                nbrs.end());
+        }
+    }
+
+    // Step 4: Remove target from the nodes container.
+    nodes.erase(nodes.begin() + targetIndex);
+
+    // Step 5: Update entryPoint.
+    if (target == entryPoint)
+    {
+        if (nodes.empty())
+        {
+            // Graph is now empty.
+            entryPoint = nullptr;
+        }
+        else
+        {
+            // Select the remaining node with the highest level.
+            // On ties, the first encountered in nodes order wins.
+            HNSWNode* best = nodes[0];
+            for (int i = 1; i < static_cast<int>(nodes.size()); i++)
+            {
+                if (nodes[i]->level > best->level)
+                {
+                    best = nodes[i];
+                }
+            }
+            entryPoint = best;
+        }
+    }
+
+    // Step 6: Free the deleted node's memory exactly once.
+    // All pointers to target have already been removed above.
+    delete target;
+}
+
+int HNSW::nodeCount() const
+{
+    return static_cast<int>(nodes.size());
 }

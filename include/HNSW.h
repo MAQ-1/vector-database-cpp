@@ -47,4 +47,6 @@ public:
 
 void remove(int id);
 
+    int nodeCount() const;
+
 };
