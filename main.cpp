@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include "httplib.h"
 #include "VectorDatabase.h"
 #include <nlohmann/json.hpp>
@@ -150,68 +151,204 @@ int main()
                       }
                   });
 
-    // algo select
-
+    // SEARCH
     server.Get("/search",
-               [](const httplib::Request &req,
-                  httplib::Response &res)
-               {
-                   try
-                   {
-                       // Read query vector
-                       float x = std::stof(req.get_param_value("x"));
-                       float y = std::stof(req.get_param_value("y"));
+    [](const httplib::Request &req,
+       httplib::Response &res)
+    {
+        // ── 1. Parse v ────────────────────────────────────────────
+        if (!req.has_param("v"))
+        {
+            json e; e["success"] = false;
+            e["error"] = "Missing query vector parameter 'v'.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       std::vector<float> query = {x, y};
+        std::vector<float> query;
+        try
+        {
+            std::stringstream ss(req.get_param_value("v"));
+            std::string token;
+            while (std::getline(ss, token, ','))
+                query.push_back(std::stof(token));
+        }
+        catch (...)
+        {
+            json e; e["success"] = false;
+            e["error"] = "Invalid query vector.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       // Read algorithm
-                       std::string algo =
-                           req.get_param_value("algorithm");
+        if (query.empty())
+        {
+            json e; e["success"] = false;
+            e["error"] = "Invalid query vector.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       SearchAlgorithm algorithm;
+        // ── 2. Parse k ────────────────────────────────────────────
+        if (!req.has_param("k"))
+        {
+            json e; e["success"] = false;
+            e["error"] = "Missing parameter 'k'.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       if (algo == "bruteforce")
-                           algorithm = SearchAlgorithm::BRUTE_FORCE;
+        int k = 0;
+        try { k = std::stoi(req.get_param_value("k")); }
+        catch (...)
+        {
+            json e; e["success"] = false;
+            e["error"] = "Invalid parameter 'k'.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       else if (algo == "kdtree")
-                           algorithm = SearchAlgorithm::KD_TREE;
+        if (k <= 0)
+        {
+            json e; e["success"] = false;
+            e["error"] = "k must be greater than 0.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       else if (algo == "lsh")
-                           algorithm = SearchAlgorithm::LSH;
+        // ── 3. Parse metric ───────────────────────────────────────
+        if (!req.has_param("metric"))
+        {
+            json e; e["success"] = false;
+            e["error"] = "Missing parameter 'metric'.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       else if (algo == "hnsw")
-                           algorithm = SearchAlgorithm::HNSW;
+        std::string metricStr = req.get_param_value("metric");
+        Metric metric;
+        if      (metricStr == "cosine")     metric = Metric::COSINE;
+        else if (metricStr == "euclidean")  metric = Metric::EUCLIDEAN;
+        else if (metricStr == "manhattan")  metric = Metric::MANHATTAN;
+        else if (metricStr == "dot_product") metric = Metric::DOT_PRODUCT;
+        else
+        {
+            json e; e["success"] = false;
+            e["error"] = "Invalid metric.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       else
-                           throw std::runtime_error("Invalid algorithm.");
+        // ── 4. Parse algo ─────────────────────────────────────────
+        if (!req.has_param("algo"))
+        {
+            json e; e["success"] = false;
+            e["error"] = "Missing parameter 'algo'.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       VectorRecord result =
-                           db.search(query, algorithm);
+        std::string algoStr = req.get_param_value("algo");
+        SearchAlgorithm algorithm;
+        if      (algoStr == "bruteforce") algorithm = SearchAlgorithm::BRUTE_FORCE;
+        else if (algoStr == "kdtree")     algorithm = SearchAlgorithm::KD_TREE;
+        else if (algoStr == "hnsw")       algorithm = SearchAlgorithm::HNSW;
+        else if (algoStr == "lsh")        algorithm = SearchAlgorithm::LSH;
+        else
+        {
+            json e; e["success"] = false;
+            e["error"] = "Invalid algorithm.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       json response =
-                           {
-                               {"id", result.id},
-                               {"embedding", result.embedding},
-                               {"metadata", result.metadata}};
+        // ── 5. Algorithm / metric compatibility ───────────────────
+        //
+        // bruteforce routes through knnSearch() which is metric-aware.
+        // kdtree / hnsw / lsh each call their own internal search()
+        // which uses Euclidean distance only and returns a single result.
+        // They do not support arbitrary metrics or k > 1.
+        const bool isIndexAlgo = (algorithm == SearchAlgorithm::KD_TREE ||
+                                  algorithm == SearchAlgorithm::HNSW    ||
+                                  algorithm == SearchAlgorithm::LSH);
 
-                       res.set_content(
-                           response.dump(4),
-                           "application/json");
-                   }
-                   catch (const std::exception &e)
-                   {
-                       json error;
+        if (isIndexAlgo && metric != Metric::EUCLIDEAN)
+        {
+            json e; e["success"] = false;
+            e["error"] = "Metric not supported by selected algorithm. "
+                         "kdtree, hnsw, and lsh only support metric=euclidean.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       error["success"] = false;
-                       error["error"] = e.what();
+        if (isIndexAlgo && k != 1)
+        {
+            json e; e["success"] = false;
+            e["error"] = "kdtree, hnsw, and lsh only support k=1. "
+                         "Use algo=bruteforce for Top-K search.";
+            res.status = 400;
+            res.set_content(e.dump(4), "application/json");
+            return;
+        }
 
-                       res.status = 400;
+        // ── 6. Execute search ─────────────────────────────────────
+        try
+        {
+            json results = json::array();
 
-                       res.set_content(
-                           error.dump(4),
-                           "application/json");
-                   }
-               });
+            if (algorithm == SearchAlgorithm::BRUTE_FORCE)
+            {
+                // knnSearch is metric-aware and returns scored Top-K results.
+                std::vector<SearchResult> hits =
+                    db.knnSearch(query, k, metric);
+
+                for (const auto &hit : hits)
+                {
+                    results.push_back({
+                        {"id",        hit.record.id},
+                        {"score",     hit.score},
+                        {"embedding", hit.record.embedding},
+                        {"metadata",  hit.record.metadata}
+                    });
+                }
+            }
+            else
+            {
+                // kdtree / hnsw / lsh: single nearest-neighbour,
+                // Euclidean only, no score available from this path.
+                VectorRecord hit = db.search(query, algorithm);
+                results.push_back({
+                    {"id",        hit.id},
+                    {"score",     nullptr},
+                    {"embedding", hit.embedding},
+                    {"metadata",  hit.metadata}
+                });
+            }
+
+            json response;
+            response["success"] = true;
+            response["results"] = results;
+            res.set_content(response.dump(4), "application/json");
+        }
+        catch (const std::exception &e)
+        {
+            json err; err["success"] = false;
+            err["error"] = e.what();
+            res.status = 400;
+            res.set_content(err.dump(4), "application/json");
+        }
+    });
 
 
 

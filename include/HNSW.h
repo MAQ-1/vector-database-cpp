@@ -9,7 +9,7 @@
 class HNSW
 {
     using Candidate = std::pair<float, HNSWNode*>;
-     static constexpr int M = 4;
+    static constexpr int M = 16;
 private:
     std::vector<HNSWNode*> nodes;
 

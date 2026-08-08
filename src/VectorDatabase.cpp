@@ -49,6 +49,13 @@ void VectorDatabase::display() const
 void VectorDatabase::clear()
 {
     records.clear();
+
+    // Reset all indexes so they stay in sync with records.
+    // Without this, loadFromFile() would re-insert into indexes
+    // that still hold the previous data, producing duplicates.
+    kdTree = KDTree();
+    hnsw   = HNSW();
+    lsh    = LSH();
 }
 // Remove a record by its ID.
 

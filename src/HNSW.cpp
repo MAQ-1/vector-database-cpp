@@ -40,13 +40,28 @@ void HNSW::insert(const VectorRecord &record)
     }
 
     // Number of candidates to explore per level.
-    const int efConstruction = 10;
+    const int efConstruction = 200;
 
     // From newNode's level down to 0, run efSearch and connect M neighbors.
-    for (int currentLevel = std::min(newNode->level, entryPoint->level);
+    // Start at newNode->level (not min(newNode->level, entryPoint->level)).
+    // When newNode->level > entryPoint->level, the old min() clipped the
+    // loop start to entryPoint->level, silently skipping all levels above
+    // it and leaving newNode's upper neighbor lists permanently empty.
+    for (int currentLevel = newNode->level;
          currentLevel >= 0;
          currentLevel--)
     {
+        // At levels above the current entry point's level, no existing node
+        // has neighbors at currentLevel yet. efSearch would access
+        // current->neighbors[currentLevel] out of bounds. Instead, connect
+        // newNode directly to the entry point at the levels they share
+        // (connect() uses min(node1->level, node2->level) internally).
+        if (currentLevel > entryPoint->level)
+        {
+            connect(newNode, entryPoint);
+            continue;
+        }
+
         std::vector<HNSWNode *> nearestNeighbors =
             efSearch(current, newNode->record.embedding, currentLevel, efConstruction);
 
@@ -262,24 +277,28 @@ std::vector<HNSWNode *> HNSW::efSearch(
     int level,
     int ef)
 {
-    // Store (distance, node) pairs so distances are not recomputed during sort.
-    std::vector<Candidate> resultPairs;
-    resultPairs.reserve(ef);
-
+    // candidates: min-heap on distance — the frontier to expand next.
+    // Closest node is always at the top.
     std::priority_queue<
         Candidate,
         std::vector<Candidate>,
         std::greater<Candidate>>
         candidates;
 
+    // results: max-heap on distance — the current best-ef set.
+    // Worst (farthest) node is at the top, so we can evict it cheaply
+    // when a closer node arrives.
+    std::priority_queue<Candidate> results;
+
+    std::unordered_set<HNSWNode *> visited;
+    visited.reserve(ef * 2);
+
     float startDistance = Similarity::euclideanDistance(
         startNode->record.embedding,
         query);
 
     candidates.push({startDistance, startNode});
-
-    std::unordered_set<HNSWNode *> visited;
-    visited.reserve(ef * 2);
+    results.push({startDistance, startNode});
     visited.insert(startNode);
 
     while (!candidates.empty())
@@ -287,10 +306,10 @@ std::vector<HNSWNode *> HNSW::efSearch(
         Candidate current = candidates.top();
         candidates.pop();
 
-        // Reuse the already-computed distance.
-        resultPairs.push_back(current);
-
-        if (resultPairs.size() >= static_cast<size_t>(ef))
+        // Standard HNSW termination: if the closest unexplored candidate
+        // is already farther than the worst result we have, no future
+        // expansion can improve the result set.
+        if (current.first > results.top().first)
         {
             break;
         }
@@ -308,32 +327,35 @@ std::vector<HNSWNode *> HNSW::efSearch(
                 neighbor->record.embedding,
                 query);
 
-            // Only push if result set is not full yet,
-            // or this candidate is better than the current worst result.
-            if (resultPairs.size() < static_cast<size_t>(ef) ||
-                dist < resultPairs.back().first)
+            // Admit the neighbor if the result set is not full yet,
+            // or if it is closer than the current worst result.
+            if (static_cast<int>(results.size()) < ef ||
+                dist < results.top().first)
             {
                 candidates.push({dist, neighbor});
+                results.push({dist, neighbor});
+
+                // Evict the farthest result if we are over capacity.
+                if (static_cast<int>(results.size()) > ef)
+                {
+                    results.pop();
+                }
             }
         }
     }
 
-    // Sort by distance ascending using already-cached distances.
-    std::sort(
-        resultPairs.begin(),
-        resultPairs.end(),
-        [](const Candidate &a, const Candidate &b)
-        {
-            return a.first < b.first;
-        });
-
-    // Extract nodes in sorted order.
+    // Drain the max-heap into a vector and reverse to get ascending order.
     std::vector<HNSWNode *> result;
-    result.reserve(resultPairs.size());
-    for (const auto &p : resultPairs)
+    result.reserve(results.size());
+
+    while (!results.empty())
     {
-        result.push_back(p.second);
+        result.push_back(results.top().second);
+        results.pop();
     }
+
+    // Max-heap drains largest-first; reverse for closest-first.
+    std::reverse(result.begin(), result.end());
 
     return result;
 }
