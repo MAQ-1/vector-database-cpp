@@ -12,8 +12,11 @@ int main()
 
     try
     {
-        // db.loadFromFile("vectors.txt");
+        db.loadFromFile("vectors.txt");
         std::cout << "Database loaded successfully.\n";
+        std::cout << "Total vectors: "
+          << db.getRecords().size()
+          << std::endl;
     }
     catch (const std::exception &)
     {
@@ -65,7 +68,7 @@ int main()
                                 embedding,
                                 metadata));
 
-                        // db.saveToFile("vectors.txt");
+                        db.saveToFile("vectors.txt");
 
                         res.set_content(
                             R"({
@@ -120,7 +123,7 @@ int main()
 
                           // Delete from database
                           db.remove(id);
-                        //   db.saveToFile("vectors.txt");
+                          db.saveToFile("vectors.txt");
 
                           json response =
                               {
@@ -264,31 +267,45 @@ server.Get("/benchmark",
     std::cout << "     http://localhost:8080\n";
     std::cout << "=================================\n";
 
+// Generate 10,000 random vectors only
+// when the database is empty.
 
-    // Generate 10,000 random vectors
-std::mt19937 rng(42);
-std::uniform_real_distribution<float> dist(0.0f, 1000.0f);
-
-for (int i = 1; i <= 10000; i++)
+if (db.getRecords().empty())
 {
-  
-    std::vector<float> embedding(128);
+    std::mt19937 rng(42);
+    std::uniform_real_distribution<float> dist(0.0f, 1000.0f);
 
-    for (float &value : embedding)
+    for (int i = 1; i <= 10000; i++)
     {
-        value = dist(rng);
-    }
-    db.insert(
-        VectorRecord(
-            i,
-            embedding,
-            "Random Vector"));
-}
+        std::vector<float> embedding(128);
 
-std::cout
-<< "Inserted "
-<< db.getRecords().size()
-<< " vectors.\n";
+        for (float &value : embedding)
+        {
+            value = dist(rng);
+        }
+
+        db.insert(
+            VectorRecord(
+                i,
+                embedding,
+                "Random Vector"));
+    }
+
+    // Save the generated dataset
+    db.saveToFile("vectors.txt");
+
+    std::cout
+        << "Generated and saved "
+        << db.getRecords().size()
+        << " vectors.\n";
+}
+else
+{
+    std::cout
+        << "Using existing database with "
+        << db.getRecords().size()
+        << " vectors.\n";
+}
 
     server.listen("0.0.0.0", 8080);
 

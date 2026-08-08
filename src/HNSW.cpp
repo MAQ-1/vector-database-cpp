@@ -27,9 +27,10 @@ void HNSW::insert(const VectorRecord &record)
     // Start from the current entry point.
     HNSWNode *current = entryPoint;
 
-    // Search from the highest level down to the new node's level.
+    // Greedy descend from the top level down to newNode's level + 1.
+    // These levels are skipped — we only need the closest entry point.
     for (int currentLevel = entryPoint->level;
-         currentLevel >= newNode->level;
+         currentLevel > newNode->level;
          currentLevel--)
     {
         current = greedySearch(
@@ -38,25 +39,28 @@ void HNSW::insert(const VectorRecord &record)
             currentLevel);
     }
 
-    // Number of candidates to explore.
+    // Number of candidates to explore per level.
     const int efConstruction = 10;
 
-    // Find the best candidate neighbors.
-    std::vector<HNSWNode *> nearestNeighbors =
-        efSearch(
-            current,
-            newNode->record.embedding,
-            0,
-            efConstruction);
-
-    // Connect the new node to every selected neighbor.
-    const int M = 4;
-
-    for (int i = 0;
-         i < nearestNeighbors.size() && i < M;
-         i++)
+    // From newNode's level down to 0, run efSearch and connect M neighbors.
+    for (int currentLevel = std::min(newNode->level, entryPoint->level);
+         currentLevel >= 0;
+         currentLevel--)
     {
-        connect(newNode, nearestNeighbors[i]);
+        std::vector<HNSWNode *> nearestNeighbors =
+            efSearch(current, newNode->record.embedding, currentLevel, efConstruction);
+
+        // Connect up to M neighbors at this level.
+        for (int i = 0; i < static_cast<int>(nearestNeighbors.size()) && i < M; i++)
+        {
+            connect(newNode, nearestNeighbors[i]);
+        }
+
+        // Best neighbor becomes the entry point for the next level down.
+        if (!nearestNeighbors.empty())
+        {
+            current = nearestNeighbors[0];
+        }
     }
 
     // Add the new node to the graph.
@@ -235,7 +239,7 @@ VectorRecord HNSW::search(const std::vector<float> &query)
     }
 
     // Step 2: Explore around that region.
-    const int efSearchValue = 200;
+    const int efSearchValue = 50;
 
     std::vector<HNSWNode *> candidates =
         efSearch(current, query, 0, efSearchValue);
@@ -258,7 +262,9 @@ std::vector<HNSWNode *> HNSW::efSearch(
     int level,
     int ef)
 {
-    std::vector<HNSWNode *> result;
+    // Store (distance, node) pairs so distances are not recomputed during sort.
+    std::vector<Candidate> resultPairs;
+    resultPairs.reserve(ef);
 
     std::priority_queue<
         Candidate,
@@ -266,13 +272,14 @@ std::vector<HNSWNode *> HNSW::efSearch(
         std::greater<Candidate>>
         candidates;
 
-    float distance = Similarity::euclideanDistance(
+    float startDistance = Similarity::euclideanDistance(
         startNode->record.embedding,
         query);
 
-    candidates.push({distance, startNode});
+    candidates.push({startDistance, startNode});
 
     std::unordered_set<HNSWNode *> visited;
+    visited.reserve(ef * 2);
     visited.insert(startNode);
 
     while (!candidates.empty())
@@ -280,44 +287,53 @@ std::vector<HNSWNode *> HNSW::efSearch(
         Candidate current = candidates.top();
         candidates.pop();
 
-        HNSWNode *currentNode = current.second;
+        // Reuse the already-computed distance.
+        resultPairs.push_back(current);
 
-        result.push_back(currentNode);
-
-        if (result.size() >= ef)
+        if (resultPairs.size() >= static_cast<size_t>(ef))
         {
             break;
         }
 
-        for (HNSWNode *neighbor : currentNode->neighbors[level])
+        for (HNSWNode *neighbor : current.second->neighbors[level])
         {
-            if (visited.find(neighbor) != visited.end())
+            if (visited.count(neighbor))
             {
                 continue;
             }
 
             visited.insert(neighbor);
 
-            float distance = Similarity::euclideanDistance(
+            float dist = Similarity::euclideanDistance(
                 neighbor->record.embedding,
                 query);
 
-            candidates.push({distance, neighbor});
+            // Only push if result set is not full yet,
+            // or this candidate is better than the current worst result.
+            if (resultPairs.size() < static_cast<size_t>(ef) ||
+                dist < resultPairs.back().first)
+            {
+                candidates.push({dist, neighbor});
+            }
         }
     }
 
+    // Sort by distance ascending using already-cached distances.
     std::sort(
-        result.begin(),
-        result.end(),
-        [&](HNSWNode *a, HNSWNode *b)
+        resultPairs.begin(),
+        resultPairs.end(),
+        [](const Candidate &a, const Candidate &b)
         {
-            return Similarity::euclideanDistance(
-                       a->record.embedding,
-                       query) <
-                   Similarity::euclideanDistance(
-                       b->record.embedding,
-                       query);
+            return a.first < b.first;
         });
+
+    // Extract nodes in sorted order.
+    std::vector<HNSWNode *> result;
+    result.reserve(resultPairs.size());
+    for (const auto &p : resultPairs)
+    {
+        result.push_back(p.second);
+    }
 
     return result;
 }
@@ -367,12 +383,15 @@ std::vector<HNSWNode *> HNSW::findNearestNeighbors(
 //  get a random level for the new node
 int HNSW::generateRandomLevel()
 {
+    // Maximum level cap prevents unbounded level growth.
+    // log2(10000) ~ 13, so 16 is a safe upper bound.
+    const int maxLevel = 16;
+
     int level = 0;
-    while (rand() % 2 == 1) // 50% chance to go to the next level
+    while (level < maxLevel && rand() % 2 == 1)
     {
         level++;
     }
-
     return level;
 }
 
