@@ -11,6 +11,7 @@ VectorDatabase db;
 HNSW documentHnsw;
 std::vector<VectorRecord> documents;
 int nextDocumentId = 1;
+std::unordered_map<int, std::string> documentTexts;
 
 int main()
 {
@@ -453,6 +454,7 @@ int main()
 
                         // Store document in memory
                         documents.push_back(record);
+                        documentTexts[id] = text;
 
                         // Insert 768D embedding into separate HNSW
                         documentHnsw.insert(record);
@@ -545,6 +547,120 @@ int main()
                             "application/json");
                     }
                 });
+
+
+
+// ASK question endpoint 
+
+server.Post("/doc/ask",
+    [&](const httplib::Request& req,
+        httplib::Response& res)
+{
+    try
+    {
+        json body = json::parse(req.body);
+
+        if (!body.contains("question"))
+        {
+            json error = {
+                {"success", false},
+                {"error", "question is required"}
+            };
+
+            res.status = 400;
+            res.set_content(error.dump(4), "application/json");
+            return;
+        }
+
+        std::string question = body["question"];
+
+        if (question.empty())
+        {
+            json error = {
+                {"success", false},
+                {"error", "question cannot be empty"}
+            };
+
+            res.status = 400;
+            res.set_content(error.dump(4), "application/json");
+            return;
+        }
+
+        // 1. Convert question into 768D embedding
+        std::vector<float> queryEmbedding =
+            ollamaClient.embed(question);
+
+        if (queryEmbedding.empty())
+        {
+            throw std::runtime_error(
+                "Failed to generate question embedding"
+            );
+        }
+
+        // 2. Retrieve nearest document from HNSW
+        VectorRecord result =
+            documentHnsw.search(queryEmbedding);
+
+        // 3. Get original document text
+        auto it = documentTexts.find(result.id);
+
+        if (it == documentTexts.end())
+        {
+            throw std::runtime_error(
+                "Retrieved document text not found"
+            );
+        }
+
+        std::string context = it->second;
+
+        // 4. Build RAG prompt
+        std::string prompt =
+            "Answer the question using the provided document context. "
+            "If the answer is not present in the context, say that the "
+            "information is not available in the provided document.\n\n"
+            "Document:\n" +
+            context +
+            "\n\nQuestion:\n" +
+            question +
+            "\n\nAnswer:";
+
+        // 5. Generate answer using llama3.2
+        std::string answer =
+            ollamaClient.generate(prompt);
+
+        // 6. Return answer + retrieved context
+        json response = {
+            {"success", true},
+            {"answer", answer},
+            {"source_id", result.id},
+            {"source", result.metadata},
+            {"context", context}
+        };
+
+        res.set_content(
+            response.dump(4),
+            "application/json"
+        );
+    }
+    catch (const std::exception& e)
+    {
+        json error = {
+            {"success", false},
+            {"error", e.what()}
+        };
+
+        res.status = 400;
+
+        res.set_content(
+            error.dump(4),
+            "application/json"
+        );
+    }
+});
+
+
+
+
     // Banchmarkkkkkkkkkkkkkkkkkkkkk
 
     // BENCHMARK

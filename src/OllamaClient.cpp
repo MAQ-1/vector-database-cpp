@@ -62,3 +62,49 @@ std::vector<float> OllamaClient::embed(const std::string& text)
 
     return embedding;
 }
+
+std::string OllamaClient::generate(const std::string& prompt)
+{
+    if (prompt.empty())
+    {
+        throw std::runtime_error("Prompt cannot be empty.");
+    }
+
+    httplib::Client client("http://localhost:11434");
+
+    json request = {
+        {"model", "llama3.2"},
+        {"prompt", prompt},
+        {"stream", false}
+    };
+
+    auto response = client.Post(
+        "/api/generate",
+        request.dump(),
+        "application/json"
+    );
+
+    if (!response)
+    {
+        throw std::runtime_error("Could not connect to Ollama.");
+    }
+
+    if (response->status != 200)
+    {
+        throw std::runtime_error(
+            "Ollama returned HTTP status: " +
+            std::to_string(response->status)
+        );
+    }
+
+    json result = json::parse(response->body);
+
+    if (!result.contains("response"))
+    {
+        throw std::runtime_error(
+            "Ollama response does not contain generated response."
+        );
+    }
+
+    return result["response"].get<std::string>();
+}

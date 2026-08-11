@@ -8,6 +8,7 @@ class OllamaClient
 {
 public:
     std::vector<float> embed(const std::string& text);
+    std::string generate(const std::string& prompt);
 };
 
 #endif
