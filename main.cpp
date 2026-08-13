@@ -4,14 +4,18 @@
 #include "VectorDatabase.h"
 #include <nlohmann/json.hpp>
 #include "OllamaClient.h"
+#include "DocumentIngestion.h"
+#include "PdfExtractor.h"
+#include <fstream>
 
 using json = nlohmann::json;
+using namespace std;
 
 VectorDatabase db;
 HNSW documentHnsw;
-std::vector<VectorRecord> documents;
+vector<VectorRecord> documents;
 int nextDocumentId = 1;
-std::unordered_map<int, std::string> documentTexts;
+unordered_map<int, string> documentTexts;
 
 int main()
 {
@@ -20,14 +24,14 @@ int main()
     try
     {
         db.loadFromFile("vectors.txt");
-        std::cout << "Database loaded successfully.\n";
-        std::cout << "Total vectors: "
+        cout << "Database loaded successfully.\n";
+        cout << "Total vectors: "
                   << db.getRecords().size()
-                  << std::endl;
+                  << endl;
     }
-    catch (const std::exception &)
+    catch (const exception &)
     {
-        std::cout << "No existing database found. Starting with an empty database.\n";
+        cout << "No existing database found. Starting with an empty database.\n";
     }
 
     server.Get("/", [](const httplib::Request &req,
@@ -62,11 +66,11 @@ int main()
 
                         int id = body["id"];
 
-                        std::vector<float> embedding =
+                        vector<float> embedding =
                             body["embedding"]
-                                .get<std::vector<float>>();
+                                .get<vector<float>>();
 
-                        std::string metadata =
+                        string metadata =
                             body["metadata"];
 
                         db.insert(
@@ -84,7 +88,7 @@ int main()
             })",
                             "application/json");
                     }
-                    catch (const std::exception &e)
+                    catch (const exception &e)
                     {
                         json error;
 
@@ -126,7 +130,7 @@ int main()
                       try
                       {
                           // Read ID from query parameter
-                          int id = std::stoi(req.get_param_value("id"));
+                          int id = stoi(req.get_param_value("id"));
 
                           // Delete from database
                           db.remove(id);
@@ -142,7 +146,7 @@ int main()
                               response.dump(4),
                               "application/json");
                       }
-                      catch (const std::exception &e)
+                      catch (const exception &e)
                       {
                           json error;
 
@@ -173,13 +177,13 @@ int main()
                        return;
                    }
 
-                   std::vector<float> query;
+                   vector<float> query;
                    try
                    {
-                       std::stringstream ss(req.get_param_value("v"));
-                       std::string token;
-                       while (std::getline(ss, token, ','))
-                           query.push_back(std::stof(token));
+                       stringstream ss(req.get_param_value("v"));
+                       string token;
+                       while (getline(ss, token, ','))
+                           query.push_back(stof(token));
                    }
                    catch (...)
                    {
@@ -215,7 +219,7 @@ int main()
                    int k = 0;
                    try
                    {
-                       k = std::stoi(req.get_param_value("k"));
+                       k = stoi(req.get_param_value("k"));
                    }
                    catch (...)
                    {
@@ -248,7 +252,7 @@ int main()
                        return;
                    }
 
-                   std::string metricStr = req.get_param_value("metric");
+                   string metricStr = req.get_param_value("metric");
                    Metric metric;
                    if (metricStr == "cosine")
                        metric = Metric::COSINE;
@@ -279,7 +283,7 @@ int main()
                        return;
                    }
 
-                   std::string algoStr = req.get_param_value("algo");
+                   string algoStr = req.get_param_value("algo");
                    SearchAlgorithm algorithm;
                    if (algoStr == "bruteforce")
                        algorithm = SearchAlgorithm::BRUTE_FORCE;
@@ -339,7 +343,7 @@ int main()
                        if (algorithm == SearchAlgorithm::BRUTE_FORCE)
                        {
                            // knnSearch is metric-aware and returns scored Top-K results.
-                           std::vector<SearchResult> hits =
+                           vector<SearchResult> hits =
                                db.knnSearch(query, k, metric);
 
                            for (const auto &hit : hits)
@@ -366,7 +370,7 @@ int main()
                        response["results"] = results;
                        res.set_content(response.dump(4), "application/json");
                    }
-                   catch (const std::exception &e)
+                   catch (const exception &e)
                    {
                        json err;
                        err["success"] = false;
@@ -378,6 +382,13 @@ int main()
 
     // olama call
     OllamaClient ollamaClient;
+    DocumentIngestion documentIngestion(
+    ollamaClient,
+    documentHnsw,
+    documents,
+    documentTexts,
+    nextDocumentId
+);
 
     server.Get("/status", [&](const httplib::Request &, httplib::Response &res)
                {
@@ -394,7 +405,7 @@ int main()
 
         res.set_content(response.dump(2), "application/json");
     }
-    catch (const std::exception &e)
+    catch (const exception &e)
     {
         json response = {
             {"success", false},
@@ -406,6 +417,209 @@ int main()
         res.set_content(response.dump(2), "application/json");
     } });
 
+// pdf 
+// Upload PDF document endpoint
+server.Post("/doc/upload",
+            [&](const httplib::Request &req,
+                httplib::Response &res)
+            {
+                try
+                {
+                    cout << "\n[UPLOAD] Request received" << endl;
+
+                    // Check if request contains a file
+                    if (!req.form.has_file("file"))
+                    {
+                        cout << "[UPLOAD] ERROR: No file received"
+                             << endl;
+
+                        json error = {
+                            {"success", false},
+                            {"error", "PDF file is required"}};
+
+                        res.status = 400;
+                        res.set_content(
+                            error.dump(4),
+                            "application/json");
+
+                        return;
+                    }
+
+                    // Get uploaded file
+                    const auto &file =
+                        req.form.get_file("file");
+
+                    cout << "[UPLOAD] File received: "
+                         << file.filename
+                         << " | Size: "
+                         << file.content.size()
+                         << " bytes"
+                         << endl;
+
+                    // Validate filename
+                    if (file.filename.empty())
+                    {
+                        cout << "[UPLOAD] ERROR: Empty filename"
+                             << endl;
+
+                        json error = {
+                            {"success", false},
+                            {"error", "Invalid file name"}};
+
+                        res.status = 400;
+                        res.set_content(
+                            error.dump(4),
+                            "application/json");
+
+                        return;
+                    }
+
+                    // Check PDF extension
+                    string filename = file.filename;
+
+                    if (filename.size() < 4 ||
+                        filename.substr(
+                            filename.size() - 4) != ".pdf")
+                    {
+                        cout << "[UPLOAD] ERROR: Not a PDF file"
+                             << endl;
+
+                        json error = {
+                            {"success", false},
+                            {"error", "Only PDF files are supported"}};
+
+                        res.status = 400;
+                        res.set_content(
+                            error.dump(4),
+                            "application/json");
+
+                        return;
+                    }
+
+                    // Create temporary PDF path
+                    string tempPath =
+                        "temp_" +
+                        to_string(nextDocumentId) +
+                        ".pdf";
+
+                    cout << "[UPLOAD] Temporary file: "
+                         << tempPath
+                         << endl;
+
+                    // Save uploaded PDF
+                    {
+                        ofstream outputFile(
+                            tempPath,
+                            ios::binary);
+
+                        if (!outputFile)
+                        {
+                            throw runtime_error(
+                                "Failed to create temporary PDF file");
+                        }
+
+                        outputFile.write(
+                            file.content.data(),
+                            file.content.size());
+
+                        if (!outputFile)
+                        {
+                            throw runtime_error(
+                                "Failed to write temporary PDF file");
+                        }
+                    }
+
+                    cout << "[UPLOAD] PDF saved successfully"
+                         << endl;
+
+                    // Extract text
+                    cout << "[UPLOAD] Starting PDF extraction..."
+                         << endl;
+
+                    string text =
+                        PdfExtractor::extractText(tempPath);
+
+                    cout << "[UPLOAD] PDF extraction complete"
+                         << endl;
+
+                    cout << "[UPLOAD] Characters extracted: "
+                         << text.size()
+                         << endl;
+
+                    if (text.empty())
+                    {
+                        remove(tempPath.c_str());
+
+                        throw runtime_error(
+                            "PDF contains no extractable text");
+                    }
+
+                    // Use filename as document title
+                    string title = filename;
+
+                    // Existing document ingestion pipeline
+                    cout << "[UPLOAD] Starting document ingestion..."
+                         << endl;
+
+                    int id =
+                        documentIngestion.ingest(
+                            title,
+                            text);
+
+                    cout << "[UPLOAD] Document ingestion complete"
+                         << endl;
+
+                    cout << "[UPLOAD] Document ID: "
+                         << id
+                         << endl;
+
+                    // Remove temporary PDF
+                    if (remove(tempPath.c_str()) == 0)
+                    {
+                        cout << "[UPLOAD] Temporary file removed"
+                             << endl;
+                    }
+                    else
+                    {
+                        cout << "[UPLOAD] WARNING: "
+                             << "Could not remove temporary file"
+                             << endl;
+                    }
+
+                    // Success response
+                    json response = {
+                        {"success", true},
+                        {"id", id},
+                        {"title", title},
+                        {"filename", filename},
+                        {"characters_extracted", text.size()},
+                        {"message",
+                         "PDF extracted, embedded and inserted successfully"}};
+
+                    cout << "[UPLOAD] Sending success response"
+                         << endl;
+
+                    res.set_content(
+                        response.dump(4),
+                        "application/json");
+                }
+                catch (const exception &e)
+                {
+                    cout << "[UPLOAD] EXCEPTION: "
+                         << e.what()
+                         << endl;
+
+                    json error = {
+                        {"success", false},
+                        {"error", e.what()}};
+
+                    res.status = 400;
+
+                    res.set_content(
+                        error.dump(4),
+                        "application/json");
+                }
+            });
     // insert document endpoint
     server.Post("/doc/insert",
                 [&](const httplib::Request &req,
@@ -426,8 +640,8 @@ int main()
                             return;
                         }
 
-                        std::string title = body["title"];
-                        std::string text = body["text"];
+                        string title = body["title"];
+                        string text = body["text"];
 
                         if (text.empty())
                         {
@@ -440,37 +654,23 @@ int main()
                             return;
                         }
 
-                        // Generate 768D embedding using Ollama
-                        std::vector<float> embedding =
-                            ollamaClient.embed(text);
-
-                        // Create document record
-                        int id = nextDocumentId++;
-
-                        VectorRecord record(
-                            id,
-                            embedding,
-                            title);
-
-                        // Store document in memory
-                        documents.push_back(record);
-                        documentTexts[id] = text;
-
-                        // Insert 768D embedding into separate HNSW
-                        documentHnsw.insert(record);
+                       int id = documentIngestion.ingest(
+                            title,
+                            text
+                        );
 
                         json response = {
                             {"success", true},
                             {"id", id},
                             {"title", title},
-                            {"embedding_dimension", embedding.size()},
+                            // {"embedding_dimension", embedding.size()},
                             {"message", "Document embedded and inserted successfully"}};
 
                         res.set_content(
                             response.dump(4),
                             "application/json");
                     }
-                    catch (const std::exception &e)
+                    catch (const exception &e)
                     {
                         json error = {
                             {"success", false},
@@ -504,7 +704,7 @@ int main()
                             return;
                         }
 
-                        std::string question = body["question"];
+                        string question = body["question"];
 
                         if (question.empty())
                         {
@@ -518,7 +718,7 @@ int main()
                         }
 
                         // Convert question into the same 768D embedding space
-                        std::vector<float> queryEmbedding =
+                        vector<float> queryEmbedding =
                             ollamaClient.embed(question);
 
                         // Find nearest document using HNSW
@@ -535,7 +735,7 @@ int main()
                             response.dump(4),
                             "application/json");
                     }
-                    catch (const std::exception &e)
+                    catch (const exception &e)
                     {
                         json error = {
                             {"success", false},
@@ -552,112 +752,183 @@ int main()
 
 // ASK question endpoint 
 
+// ASK question endpoint
 server.Post("/doc/ask",
-    [&](const httplib::Request& req,
-        httplib::Response& res)
-{
-    try
-    {
-        json body = json::parse(req.body);
+            [&](const httplib::Request& req,
+                httplib::Response& res)
+            {
+                try
+                {
+                    json body = json::parse(req.body);
 
-        if (!body.contains("question"))
-        {
-            json error = {
-                {"success", false},
-                {"error", "question is required"}
-            };
+                    if (!body.contains("question"))
+                    {
+                        json error = {
+                            {"success", false},
+                            {"error", "question is required"}
+                        };
 
-            res.status = 400;
-            res.set_content(error.dump(4), "application/json");
-            return;
-        }
+                        res.status = 400;
+                        res.set_content(
+                            error.dump(4),
+                            "application/json");
+                        return;
+                    }
 
-        std::string question = body["question"];
+                    string question = body["question"];
 
-        if (question.empty())
-        {
-            json error = {
-                {"success", false},
-                {"error", "question cannot be empty"}
-            };
+                    if (question.empty())
+                    {
+                        json error = {
+                            {"success", false},
+                            {"error", "question cannot be empty"}
+                        };
 
-            res.status = 400;
-            res.set_content(error.dump(4), "application/json");
-            return;
-        }
+                        res.status = 400;
+                        res.set_content(
+                            error.dump(4),
+                            "application/json");
+                        return;
+                    }
 
-        // 1. Convert question into 768D embedding
-        std::vector<float> queryEmbedding =
-            ollamaClient.embed(question);
+                    // 1. Convert question into embedding
+                    vector<float> queryEmbedding =
+                        ollamaClient.embed(question);
 
-        if (queryEmbedding.empty())
-        {
-            throw std::runtime_error(
-                "Failed to generate question embedding"
-            );
-        }
+                    if (queryEmbedding.empty())
+                    {
+                        throw runtime_error(
+                            "Failed to generate question embedding"
+                        );
+                    }
 
-        // 2. Retrieve nearest document from HNSW
-        VectorRecord result =
-            documentHnsw.search(queryEmbedding);
+                    // 2. Retrieve top 5 relevant chunks
+                    const int TOP_K = 5;
 
-        // 3. Get original document text
-        auto it = documentTexts.find(result.id);
+                    vector<VectorRecord> results =
+                        documentHnsw.knnSearch(
+                            queryEmbedding,
+                            TOP_K);
 
-        if (it == documentTexts.end())
-        {
-            throw std::runtime_error(
-                "Retrieved document text not found"
-            );
-        }
+                    if (results.empty())
+                    {
+                        throw runtime_error(
+                            "No relevant document chunks found"
+                        );
+                    }
 
-        std::string context = it->second;
+                    // 3. Build context from retrieved chunks
+                    string context;
 
-        // 4. Build RAG prompt
-        std::string prompt =
-            "Answer the question using the provided document context. "
-            "If the answer is not present in the context, say that the "
-            "information is not available in the provided document.\n\n"
-            "Document:\n" +
-            context +
-            "\n\nQuestion:\n" +
-            question +
-            "\n\nAnswer:";
+                    json sources = json::array();
 
-        // 5. Generate answer using llama3.2
-        std::string answer =
-            ollamaClient.generate(prompt);
+                    for (int i = 0;
+                         i < static_cast<int>(results.size());
+                         i++)
+                    {
+                        const VectorRecord& result =
+                            results[i];
 
-        // 6. Return answer + retrieved context
-        json response = {
-            {"success", true},
-            {"answer", answer},
-            {"source_id", result.id},
-            {"source", result.metadata},
-            {"context", context}
-        };
+                        auto it =
+                            documentTexts.find(result.id);
 
-        res.set_content(
-            response.dump(4),
-            "application/json"
-        );
-    }
-    catch (const std::exception& e)
-    {
-        json error = {
-            {"success", false},
-            {"error", e.what()}
-        };
+                        if (it == documentTexts.end())
+                        {
+                            continue;
+                        }
 
-        res.status = 400;
+                        // Use the actual source metadata
+                        // instead of creating artificial
+                        // "Chunk 1", "Chunk 2" labels.
+                        string sourceLabel =
+                            result.metadata;
 
-        res.set_content(
-            error.dump(4),
-            "application/json"
-        );
-    }
-});
+                        context +=
+                            "\n--- Source: " +
+                            sourceLabel +
+                            " ---\n";
 
+                        context += it->second;
+
+                        context +=
+                            "\n--- End Source ---\n";
+
+                        sources.push_back({
+                            {"id", result.id},
+                            {"source", sourceLabel}
+                        });
+                    }
+
+                    if (context.empty())
+                    {
+                        throw runtime_error(
+                            "Retrieved chunks contain no text"
+                        );
+                    }
+
+                    // 4. Build RAG prompt
+                    string prompt =
+                        "You are answering a question using "
+                        "retrieved document sources.\n\n"
+
+                        "IMPORTANT RULES:\n"
+                        "1. Answer only using information supported "
+                        "by the provided document context.\n"
+                        "2. Do not invent facts, sources, chunk "
+                        "numbers, page numbers, or citations.\n"
+                        "3. The text inside a document may contain "
+                        "its own paragraph or section numbers. "
+                        "Do not confuse those numbers with chunk "
+                        "numbers.\n"
+                        "4. If you refer to a source, use the exact "
+                        "source label provided in the context.\n"
+                        "5. If the answer is not present in the "
+                        "provided context, clearly say that the "
+                        "information is not available in the "
+                        "provided document.\n"
+                        "6. Prefer a clear and direct answer. "
+                        "Do not mention the retrieval process unless "
+                        "the user asks about it.\n\n"
+
+                        "RETRIEVED DOCUMENT SOURCES:\n" +
+                        context +
+
+                        "\n\nUSER QUESTION:\n" +
+                        question +
+
+                        "\n\nANSWER:";
+
+                    // 5. Generate answer using Ollama
+                    string answer =
+                        ollamaClient.generate(prompt);
+
+                    // 6. Return answer + sources + context
+                    json response = {
+                        {"success", true},
+                        {"answer", answer},
+                        {"sources", sources},
+                        {"chunks_retrieved", results.size()},
+                        {"context", context}
+                    };
+
+                    res.set_content(
+                        response.dump(4),
+                        "application/json");
+                }
+                catch (const exception& e)
+                {
+                    json error = {
+                        {"success", false},
+                        {"error", e.what()}
+                    };
+
+                    res.status = 400;
+
+                    res.set_content(
+                        error.dump(4),
+                        "application/json");
+                }
+            });
 
 
 
@@ -671,7 +942,7 @@ server.Post("/doc/ask",
                    try
                    {
 
-                       std::vector<float> query = db.getRecords()[0].embedding;
+                       vector<float> query = db.getRecords()[0].embedding;
 
                        Benchmark result = db.benchmark(query);
 
@@ -686,7 +957,7 @@ server.Post("/doc/ask",
                            response.dump(4),
                            "application/json");
                    }
-                   catch (const std::exception &e)
+                   catch (const exception &e)
                    {
                        json error;
 
@@ -701,22 +972,22 @@ server.Post("/doc/ask",
                    }
                });
 
-    std::cout << "=================================\n";
-    std::cout << "     VectorDB Server Started\n";
-    std::cout << "     http://localhost:8080\n";
-    std::cout << "=================================\n";
+    cout << "=================================\n";
+    cout << "     VectorDB Server Started\n";
+    cout << "     http://localhost:8080\n";
+    cout << "=================================\n";
 
     // Generate 10,000 random vectors only
     // when the database is empty.
 
     if (db.getRecords().empty())
     {
-        std::mt19937 rng(42);
-        std::uniform_real_distribution<float> dist(0.0f, 1000.0f);
+        mt19937 rng(42);
+        uniform_real_distribution<float> dist(0.0f, 1000.0f);
 
         for (int i = 1; i <= 10000; i++)
         {
-            std::vector<float> embedding(128);
+            vector<float> embedding(128);
 
             for (float &value : embedding)
             {
@@ -733,14 +1004,14 @@ server.Post("/doc/ask",
         // Save the generated dataset
         db.saveToFile("vectors.txt");
 
-        std::cout
+        cout
             << "Generated and saved "
             << db.getRecords().size()
             << " vectors.\n";
     }
     else
     {
-        std::cout
+        cout
             << "Using existing database with "
             << db.getRecords().size()
             << " vectors.\n";

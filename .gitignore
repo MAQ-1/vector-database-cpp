@@ -1,5 +1,64 @@
+# =========================
+# Build / Executables
+# =========================
+
 *.exe
 *.o
 *.out
-.env
+
+# =========================
+# Test / Generated Files
+# =========================
+
+test_*.exe
+temp_*.pdf
+*.pdf
+
+# =========================
+# Vector Database / Runtime Data
+# =========================
+
 vectors.txt
+*.db
+*.bin
+
+# =========================
+# Node.js
+# =========================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# =========================
+# Frontend Build
+# =========================
+
+frontend/dist/
+dist/
+
+# =========================
+# Environment / Secrets
+# =========================
+
+.env
+.env.*
+!.env.example
+
+# =========================
+# IDE
+# =========================
+
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+.idea/
+
+# =========================
+# OS
+# =========================
+
+.DS_Store
+Thumbs.db

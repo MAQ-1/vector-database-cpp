@@ -6,12 +6,13 @@
 #include <stdexcept>
 
 using json = nlohmann::json;
+using namespace std;
 
-std::vector<float> OllamaClient::embed(const std::string& text)
+vector<float> OllamaClient::embed(const string& text)
 {
     if (text.empty())
     {
-        throw std::runtime_error("Text cannot be empty.");
+        throw runtime_error("Text cannot be empty.");
     }
 
     httplib::Client client("http://localhost:11434");
@@ -29,14 +30,14 @@ std::vector<float> OllamaClient::embed(const std::string& text)
 
     if (!response)
     {
-        throw std::runtime_error("Could not connect to Ollama.");
+        throw runtime_error("Could not connect to Ollama.");
     }
 
     if (response->status != 200)
     {
-        throw std::runtime_error(
+        throw runtime_error(
             "Ollama returned HTTP status: " +
-            std::to_string(response->status)
+            to_string(response->status)
         );
     }
 
@@ -44,30 +45,30 @@ std::vector<float> OllamaClient::embed(const std::string& text)
 
     if (!result.contains("embedding"))
     {
-        throw std::runtime_error(
+        throw runtime_error(
             "Ollama response does not contain embedding."
         );
     }
 
-    std::vector<float> embedding =
-        result["embedding"].get<std::vector<float>>();
+    vector<float> embedding =
+        result["embedding"].get<vector<float>>();
 
     if (embedding.size() != 768)
     {
-        throw std::runtime_error(
+        throw runtime_error(
             "Expected 768-dimensional embedding, got " +
-            std::to_string(embedding.size())
+            to_string(embedding.size())
         );
     }
 
     return embedding;
 }
 
-std::string OllamaClient::generate(const std::string& prompt)
+string OllamaClient::generate(const string& prompt)
 {
     if (prompt.empty())
     {
-        throw std::runtime_error("Prompt cannot be empty.");
+        throw runtime_error("Prompt cannot be empty.");
     }
 
     httplib::Client client("http://localhost:11434");
@@ -86,14 +87,14 @@ std::string OllamaClient::generate(const std::string& prompt)
 
     if (!response)
     {
-        throw std::runtime_error("Could not connect to Ollama.");
+        throw runtime_error("Could not connect to Ollama.");
     }
 
     if (response->status != 200)
     {
-        throw std::runtime_error(
+        throw runtime_error(
             "Ollama returned HTTP status: " +
-            std::to_string(response->status)
+            to_string(response->status)
         );
     }
 
@@ -101,10 +102,10 @@ std::string OllamaClient::generate(const std::string& prompt)
 
     if (!result.contains("response"))
     {
-        throw std::runtime_error(
+        throw runtime_error(
             "Ollama response does not contain generated response."
         );
     }
 
-    return result["response"].get<std::string>();
+    return result["response"].get<string>();
 }

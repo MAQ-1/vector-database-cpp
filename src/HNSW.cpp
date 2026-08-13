@@ -4,6 +4,8 @@
 #include <cstdlib> // for rand()
 #include "HNSWNode.h"
 #include <stdexcept>
+
+using namespace std;
 HNSW::HNSW()
 {
     entryPoint = nullptr;
@@ -62,7 +64,7 @@ void HNSW::insert(const VectorRecord &record)
             continue;
         }
 
-        std::vector<HNSWNode *> nearestNeighbors =
+        vector<HNSWNode *> nearestNeighbors =
             efSearch(current, newNode->record.embedding, currentLevel, efConstruction);
 
         // Connect up to M neighbors at this level.
@@ -93,7 +95,7 @@ void HNSW::insert(const VectorRecord &record)
 // Greedy Search on a specific level.
 HNSWNode *HNSW::greedySearch(
     HNSWNode *startNode,
-    const std::vector<float> &query,
+    const vector<float> &query,
     int level)
 {
     // Start from the given node.
@@ -150,7 +152,7 @@ HNSWNode *HNSW::greedySearch(
 // connection neighbor
 void HNSW::connect(HNSWNode *node1, HNSWNode *node2)
 {
-    int minLevel = std::min(node1->level, node2->level);
+    int minLevel = min(node1->level, node2->level);
 
     for (int level = 0; level <= minLevel; level++)
     {
@@ -237,12 +239,12 @@ void HNSW::pruneNeighbors(HNSWNode *node, int level)
 
 
 
-VectorRecord HNSW::search(const std::vector<float> &query)
+VectorRecord HNSW::search(const vector<float> &query)
 {
     // Empty graph.
     if (nodes.empty())
     {
-        throw std::runtime_error("HNSW graph is empty.");
+        throw runtime_error("HNSW graph is empty.");
     }
 
     // Step 1: Navigate quickly to the correct region.
@@ -256,7 +258,7 @@ VectorRecord HNSW::search(const std::vector<float> &query)
     // Step 2: Explore around that region.
     const int efSearchValue = 50;
 
-    std::vector<HNSWNode *> candidates =
+    vector<HNSWNode *> candidates =
         efSearch(current, query, 0, efSearchValue);
 
     // Step 3: Return the closest candidate.
@@ -268,29 +270,85 @@ VectorRecord HNSW::search(const std::vector<float> &query)
     return candidates[0]->record;
 }
 
+vector<VectorRecord> HNSW::knnSearch(
+    const vector<float>& query,
+    int k)
+{
+    if (nodes.empty())
+    {
+        throw runtime_error("HNSW graph is empty.");
+    }
+
+    if (k <= 0)
+    {
+        throw invalid_argument(
+            "k must be greater than 0.");
+    }
+
+    // Step 1: Navigate quickly to the correct region
+    HNSWNode* current = entryPoint;
+
+    for (int level = entryPoint->level;
+         level >= 0;
+         level--)
+    {
+        current = greedySearch(
+            current,
+            query,
+            level);
+    }
+
+    // Step 2: Explore candidates around the region
+    const int efSearchValue =
+        max(50, k);
+
+    vector<HNSWNode*> candidates =
+        efSearch(
+            current,
+            query,
+            0,
+            efSearchValue);
+
+    // Step 3: Convert the closest K nodes
+    // into VectorRecords
+    vector<VectorRecord> results;
+
+    int resultCount =
+        min(k, static_cast<int>(candidates.size()));
+
+    results.reserve(resultCount);
+
+    for (int i = 0; i < resultCount; i++)
+    {
+        results.push_back(
+            candidates[i]->record);
+    }
+
+    return results;
+}
 
 
 
-std::vector<HNSWNode *> HNSW::efSearch(
+vector<HNSWNode *> HNSW::efSearch(
     HNSWNode *startNode,
-    const std::vector<float> &query,
+    const vector<float> &query,
     int level,
     int ef)
 {
     // candidates: min-heap on distance — the frontier to expand next.
     // Closest node is always at the top.
-    std::priority_queue<
+    priority_queue<
         Candidate,
-        std::vector<Candidate>,
-        std::greater<Candidate>>
+        vector<Candidate>,
+        greater<Candidate>>
         candidates;
 
     // results: max-heap on distance — the current best-ef set.
     // Worst (farthest) node is at the top, so we can evict it cheaply
     // when a closer node arrives.
-    std::priority_queue<Candidate> results;
+    priority_queue<Candidate> results;
 
-    std::unordered_set<HNSWNode *> visited;
+    unordered_set<HNSWNode *> visited;
     visited.reserve(ef * 2);
 
     float startDistance = Similarity::euclideanDistance(
@@ -345,7 +403,7 @@ std::vector<HNSWNode *> HNSW::efSearch(
     }
 
     // Drain the max-heap into a vector and reverse to get ascending order.
-    std::vector<HNSWNode *> result;
+    vector<HNSWNode *> result;
     result.reserve(results.size());
 
     while (!results.empty())
@@ -355,7 +413,7 @@ std::vector<HNSWNode *> HNSW::efSearch(
     }
 
     // Max-heap drains largest-first; reverse for closest-first.
-    std::reverse(result.begin(), result.end());
+    reverse(result.begin(), result.end());
 
     return result;
 }
@@ -364,12 +422,12 @@ std::vector<HNSWNode *> HNSW::efSearch(
 
 
 
-std::vector<HNSWNode *> HNSW::findNearestNeighbors(
+vector<HNSWNode *> HNSW::findNearestNeighbors(
     HNSWNode *newNode,
     int k)
 {
     // Store every node along with its distance.
-    std::vector<std::pair<HNSWNode *, float>> distances;
+    vector<pair<HNSWNode *, float>> distances;
 
     // Compute the distance from the new node
     // to every existing node.
@@ -383,7 +441,7 @@ std::vector<HNSWNode *> HNSW::findNearestNeighbors(
     }
 
     // Sort nodes by distance.
-    std::sort(
+    sort(
         distances.begin(),
         distances.end(),
         [](const auto &a, const auto &b)
@@ -392,7 +450,7 @@ std::vector<HNSWNode *> HNSW::findNearestNeighbors(
         });
 
     // Store the K nearest nodes.
-    std::vector<HNSWNode *> nearest;
+    vector<HNSWNode *> nearest;
 
     for (int i = 0; i < k && i < distances.size(); i++)
     {
@@ -457,7 +515,7 @@ void HNSW::remove(int id)
 
         for (int lvl = 0; lvl <= node->level; lvl++)
         {
-            std::vector<HNSWNode*>& nbrs = node->neighbors[lvl];
+            vector<HNSWNode*>& nbrs = node->neighbors[lvl];
             nbrs.erase(
                 std::remove(nbrs.begin(), nbrs.end(), target),
                 nbrs.end());

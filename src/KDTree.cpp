@@ -69,14 +69,14 @@ void KDTree::display(KDNode *node) const
     }
 
     // Visit the current node
-    std::cout << "ID: " << node->record.id << std::endl;
-    std::cout << "Metadata: " << node->record.metadata << std::endl;
+    cout << "ID: " << node->record.id << endl;
+    cout << "Metadata: " << node->record.metadata << endl;
 
-    std::cout << "Embedding: ";
+    cout << "Embedding: ";
 
     for (float value : node->record.embedding)
     {
-        std::cout << value << " ";
+        cout << value << " ";
     }
     // Traverse Left Subtree
     display(node->left);
@@ -86,12 +86,12 @@ void KDTree::display(KDNode *node) const
 }
 
 VectorRecord KDTree::nearestNeighbor(
-    const std::vector<float> &query)
+    const vector<float> &query)
 {
     // tree is empty
     if (root == nullptr)
     {
-        throw std::runtime_error("KD-Tree is empty.");
+        throw runtime_error("KD-Tree is empty.");
     }
 
     // Initialize bestNode and bestDistance
@@ -108,7 +108,7 @@ VectorRecord KDTree::nearestNeighbor(
 // Private recursive function to find the nearest neighbor.
 void KDTree::nearestNeighbor(
     KDNode *node,
-    const std::vector<float> &query,
+    const vector<float> &query,
     int depth,
     KDNode *&bestNode,
     float &bestDistance)
@@ -167,7 +167,7 @@ void KDTree::nearestNeighbor(
 
     // Distance from the query to the splitting plane.
     float planeDistance =
-        std::abs(query[axis] - node->record.embedding[axis]);
+        abs(query[axis] - node->record.embedding[axis]);
 
     // Search the farther subtree only if it can
     // potentially contain a closer point.

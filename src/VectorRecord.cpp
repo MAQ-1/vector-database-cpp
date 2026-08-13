@@ -1,7 +1,9 @@
 #include "VectorRecord.h"
 
+using namespace std;
+
 VectorRecord::VectorRecord(
     int id,
-    const std::vector<float> &embedding,
-    const std::string &metadata)
+    const vector<float> &embedding,
+    const string &metadata)
      : id(id), embedding(embedding), metadata(metadata) {}

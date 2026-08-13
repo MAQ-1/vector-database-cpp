@@ -10,6 +10,8 @@
 #include "HNSWNode.h"
 #include "VectorRecord.h"
 
+using namespace std;
+
 // -------------------------------------------------------
 // makeRecord
 // 4-dim vector, all components equal to val.
@@ -40,8 +42,8 @@ static bool noReferenceToDeletedPtr(HNSW& hnsw, const HNSWNode* deletedPtr)
     HNSWNode* ep = hnsw.getEntryPoint();
     if (ep == nullptr) return true;
 
-    std::unordered_set<HNSWNode*> visited;
-    std::vector<HNSWNode*> queue = {ep};
+    unordered_set<HNSWNode*> visited;
+    vector<HNSWNode*> queue = {ep};
 
     while (!queue.empty())
     {
@@ -78,8 +80,8 @@ static int maxLevelReachable(HNSW& hnsw)
     if (ep == nullptr) return -1;
 
     int maxLvl = ep->level;
-    std::unordered_set<HNSWNode*> visited;
-    std::vector<HNSWNode*> queue = {ep};
+    unordered_set<HNSWNode*> visited;
+    vector<HNSWNode*> queue = {ep};
 
     while (!queue.empty())
     {
@@ -126,8 +128,8 @@ static void test1_delete_arbitrary_node()
     {
         // Walk reachable nodes to find the pointer for id=1.
         // We need the address before deletion to check for dangling refs.
-        std::unordered_set<HNSWNode*> visited;
-        std::vector<HNSWNode*> queue = {epBefore};
+        unordered_set<HNSWNode*> visited;
+        vector<HNSWNode*> queue = {epBefore};
         while (!queue.empty() && nodeToDelete == nullptr)
         {
             HNSWNode* cur = queue.back(); queue.pop_back();
@@ -154,7 +156,7 @@ static void test1_delete_arbitrary_node()
     VectorRecord r = hnsw.search({10.f, 10.f, 10.f, 10.f});
     assert(r.id != 1);
 
-    std::cout << "TEST 1 PASSED: delete arbitrary node, invariants hold\n";
+    cout << "TEST 1 PASSED: delete arbitrary node, invariants hold\n";
 }
 
 // -------------------------------------------------------
@@ -183,8 +185,8 @@ static void test2_delete_all_nodes_sequentially()
         HNSWNode* ep = hnsw.getEntryPoint();
         HNSWNode* targetPtr = nullptr;
         {
-            std::unordered_set<HNSWNode*> visited;
-            std::vector<HNSWNode*> queue = {ep};
+            unordered_set<HNSWNode*> visited;
+            vector<HNSWNode*> queue = {ep};
             while (!queue.empty() && targetPtr == nullptr)
             {
                 HNSWNode* cur = queue.back(); queue.pop_back();
@@ -219,7 +221,7 @@ static void test2_delete_all_nodes_sequentially()
         }
     }
 
-    std::cout << "TEST 2 PASSED: delete all nodes one by one, invariants hold at each step\n";
+    cout << "TEST 2 PASSED: delete all nodes one by one, invariants hold at each step\n";
 }
 
 // -------------------------------------------------------
@@ -265,7 +267,7 @@ static void test3_delete_entry_point()
     // Search must still work.
     hnsw.search({50.f, 50.f, 50.f, 50.f});
 
-    std::cout << "TEST 3 PASSED: delete entryPoint, new entryPoint satisfies selection rule\n";
+    cout << "TEST 3 PASSED: delete entryPoint, new entryPoint satisfies selection rule\n";
 }
 
 // -------------------------------------------------------
@@ -282,15 +284,15 @@ static void test4_delete_only_node()
     assert(hnsw.nodeCount() == 0);
     assert(hnsw.getEntryPoint() == nullptr);
 
-    // search() on empty graph must throw std::runtime_error.
+    // search() on empty graph must throw runtime_error.
     // This is the existing convention in HNSW.cpp:
-    //   if (nodes.empty()) throw std::runtime_error("HNSW graph is empty.");
+    //   if (nodes.empty()) throw runtime_error("HNSW graph is empty.");
     bool threw = false;
     try { hnsw.search({1.f, 1.f, 1.f, 1.f}); }
-    catch (const std::runtime_error&) { threw = true; }
+    catch (const runtime_error&) { threw = true; }
     assert(threw);
 
-    std::cout << "TEST 4 PASSED: delete only node → nodeCount=0, entryPoint=nullptr, search throws\n";
+    cout << "TEST 4 PASSED: delete only node → nodeCount=0, entryPoint=nullptr, search throws\n";
 }
 
 // -------------------------------------------------------
@@ -315,7 +317,7 @@ static void test5_delete_nonexistent()
     // Graph still searchable.
     hnsw.search({25.f, 25.f, 25.f, 25.f});
 
-    std::cout << "TEST 5 PASSED: delete nonexistent id is a strict no-op\n";
+    cout << "TEST 5 PASSED: delete nonexistent id is a strict no-op\n";
 }
 
 // -------------------------------------------------------
@@ -333,10 +335,10 @@ static void test6_sequential_deletions()
 
     // Capture addresses before any deletion.
     // Walk from entryPoint to collect all node pointers.
-    std::unordered_map<int, HNSWNode*> addrById;
+    unordered_map<int, HNSWNode*> addrById;
     {
-        std::unordered_set<HNSWNode*> visited;
-        std::vector<HNSWNode*> queue = {hnsw.getEntryPoint()};
+        unordered_set<HNSWNode*> visited;
+        vector<HNSWNode*> queue = {hnsw.getEntryPoint()};
         while (!queue.empty())
         {
             HNSWNode* cur = queue.back(); queue.pop_back();
@@ -369,7 +371,7 @@ static void test6_sequential_deletions()
     VectorRecord r = hnsw.search({30.f, 30.f, 30.f, 30.f});
     assert(r.id == 3);
 
-    std::cout << "TEST 6 PASSED: sequential deletions, only node 3 remains, no dangling pointers\n";
+    cout << "TEST 6 PASSED: sequential deletions, only node 3 remains, no dangling pointers\n";
 }
 
 // -------------------------------------------------------
@@ -386,8 +388,8 @@ static void test7_delete_then_insert()
     // Capture address of node 2 before deletion.
     HNSWNode* node2Addr = nullptr;
     {
-        std::unordered_set<HNSWNode*> visited;
-        std::vector<HNSWNode*> queue = {hnsw.getEntryPoint()};
+        unordered_set<HNSWNode*> visited;
+        vector<HNSWNode*> queue = {hnsw.getEntryPoint()};
         while (!queue.empty() && node2Addr == nullptr)
         {
             HNSWNode* cur = queue.back(); queue.pop_back();
@@ -419,7 +421,7 @@ static void test7_delete_then_insert()
     VectorRecord r = hnsw.search({40.f, 40.f, 40.f, 40.f});
     assert(r.id == 4);
 
-    std::cout << "TEST 7 PASSED: delete then insert, node 4 reachable, no stale pointer to node 2\n";
+    cout << "TEST 7 PASSED: delete then insert, node 4 reachable, no stale pointer to node 2\n";
 }
 
 // -------------------------------------------------------
@@ -435,6 +437,6 @@ int main()
     test6_sequential_deletions();
     test7_delete_then_insert();
 
-    std::cout << "\nAll HNSW remove() tests passed.\n";
+    cout << "\nAll HNSW remove() tests passed.\n";
     return 0;
 }

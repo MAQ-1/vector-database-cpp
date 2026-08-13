@@ -8,15 +8,17 @@
 #include "VectorRecord.h"
 #include "Metric.h"
 
+using namespace std;
+
 // -------------------------------------------------------
 // Helpers
 // -------------------------------------------------------
 
-static float manhattanExpected(const std::vector<float>& a, const std::vector<float>& b)
+static float manhattanExpected(const vector<float>& a, const vector<float>& b)
 {
     float sum = 0.0f;
     for (size_t i = 0; i < a.size(); i++)
-        sum += std::abs(a[i] - b[i]);
+        sum += abs(a[i] - b[i]);
     return sum;
 }
 
@@ -24,7 +26,7 @@ static const float EPSILON = 1e-4f;
 
 static bool nearlyEqual(float a, float b)
 {
-    return std::abs(a - b) < EPSILON;
+    return abs(a - b) < EPSILON;
 }
 
 // -------------------------------------------------------
@@ -42,7 +44,7 @@ static void test1_manhattan_scores_are_correct()
     db.insert(VectorRecord(2, {4.0f, 5.0f, 6.0f}, "a"));
     db.insert(VectorRecord(3, {7.0f, 8.0f, 9.0f}, "a"));
 
-    std::vector<float> query = {1.0f, 1.0f, 1.0f};
+    vector<float> query = {1.0f, 1.0f, 1.0f};
 
     auto results = db.knnSearch(query, 3, Metric::MANHATTAN);
     assert(results.size() == 3);
@@ -50,7 +52,7 @@ static void test1_manhattan_scores_are_correct()
     // Verify each score against hand-computed Manhattan distance.
     for (const auto& r : results)
     {
-        std::vector<float> emb;
+        vector<float> emb;
         if (r.record.id == 1) emb = {1.0f, 2.0f, 3.0f};
         else if (r.record.id == 2) emb = {4.0f, 5.0f, 6.0f};
         else                       emb = {7.0f, 8.0f, 9.0f};
@@ -59,7 +61,7 @@ static void test1_manhattan_scores_are_correct()
         assert(nearlyEqual(r.score, expected));
     }
 
-    std::cout << "TEST 1 PASSED: Manhattan scores match hand-computed values\n";
+    cout << "TEST 1 PASSED: Manhattan scores match hand-computed values\n";
 }
 
 // -------------------------------------------------------
@@ -76,14 +78,14 @@ static void test2_nearest_result_ordering()
     db.insert(VectorRecord(2, {4.0f, 4.0f, 4.0f}, "a"));
     db.insert(VectorRecord(3, {10.0f, 10.0f, 10.0f}, "a"));
 
-    std::vector<float> query = {0.0f, 0.0f, 0.0f};
+    vector<float> query = {0.0f, 0.0f, 0.0f};
 
     auto results = db.knnSearch(query, 1, Metric::MANHATTAN);
     assert(results.size() == 1);
     assert(results[0].record.id == 1);
     assert(nearlyEqual(results[0].score, 3.0f));
 
-    std::cout << "TEST 2 PASSED: nearest result has smallest Manhattan distance\n";
+    cout << "TEST 2 PASSED: nearest result has smallest Manhattan distance\n";
 }
 
 // -------------------------------------------------------
@@ -99,7 +101,7 @@ static void test3_topk_ascending_order()
     db.insert(VectorRecord(4, {2.0f, 0.0f}, "a"));   // dist = 2
     db.insert(VectorRecord(5, {4.0f, 0.0f}, "a"));   // dist = 4
 
-    std::vector<float> query = {0.0f, 0.0f};
+    vector<float> query = {0.0f, 0.0f};
 
     auto results = db.knnSearch(query, 5, Metric::MANHATTAN);
     assert(results.size() == 5);
@@ -115,7 +117,7 @@ static void test3_topk_ascending_order()
     assert(results[3].record.id == 5);
     assert(results[4].record.id == 3);
 
-    std::cout << "TEST 3 PASSED: Top-K results are in ascending distance order\n";
+    cout << "TEST 3 PASSED: Top-K results are in ascending distance order\n";
 }
 
 // -------------------------------------------------------
@@ -144,7 +146,7 @@ static void test4_optimized_matches_sort_based()
     db.insert(VectorRecord(4, {9.0f, 9.0f, 9.0f}, "a"));
     db.insert(VectorRecord(5, {3.0f, 1.0f, 1.0f}, "a"));
 
-    std::vector<float> query = {1.0f, 1.0f, 1.0f};
+    vector<float> query = {1.0f, 1.0f, 1.0f};
     const int k = 3;
 
     auto sortBased = db.knnSearch(query, k, Metric::MANHATTAN);
@@ -154,15 +156,15 @@ static void test4_optimized_matches_sort_based()
     assert(heapBased.size() == static_cast<size_t>(k));
 
     // Print both result sets for visibility.
-    std::cout << "  NORMAL KNN:    ";
+    cout << "  NORMAL KNN:    ";
     for (int i = 0; i < k; i++)
-        std::cout << "id=" << sortBased[i].record.id << " score=" << sortBased[i].score << "  ";
-    std::cout << "\n";
+        cout << "id=" << sortBased[i].record.id << " score=" << sortBased[i].score << "  ";
+    cout << "\n";
 
-    std::cout << "  OPTIMIZED KNN: ";
+    cout << "  OPTIMIZED KNN: ";
     for (int i = 0; i < k; i++)
-        std::cout << "id=" << heapBased[i].record.id << " score=" << heapBased[i].score << "  ";
-    std::cout << "\n";
+        cout << "id=" << heapBased[i].record.id << " score=" << heapBased[i].score << "  ";
+    cout << "\n";
 
     // All distances are distinct so positional order must agree exactly.
     for (int i = 0; i < k; i++)
@@ -176,13 +178,13 @@ static void test4_optimized_matches_sort_based()
     assert(sortBased[1].record.id == 1); assert(nearlyEqual(sortBased[1].score, 3.0f));
     assert(sortBased[2].record.id == 2); assert(nearlyEqual(sortBased[2].score, 4.0f));
 
-    std::cout << "TEST 4 PASSED: knnSearchOptimized matches knnSearch for Manhattan\n";
+    cout << "TEST 4 PASSED: knnSearchOptimized matches knnSearch for Manhattan\n";
 }
 
 // -------------------------------------------------------
 // TEST 5: Dimension mismatch still throws
 //
-// Similarity::manhattanDistance throws std::invalid_argument
+// Similarity::manhattanDistance throws invalid_argument
 // when vectors have different sizes. Verify this propagates.
 // -------------------------------------------------------
 static void test5_dimension_mismatch_throws()
@@ -191,19 +193,19 @@ static void test5_dimension_mismatch_throws()
     db.insert(VectorRecord(1, {1.0f, 2.0f, 3.0f}, "a"));
 
     // Query has 2 dimensions, record has 3.
-    std::vector<float> query = {1.0f, 2.0f};
+    vector<float> query = {1.0f, 2.0f};
 
     bool threw = false;
     try { db.knnSearch(query, 1, Metric::MANHATTAN); }
-    catch (const std::invalid_argument&) { threw = true; }
+    catch (const invalid_argument&) { threw = true; }
     assert(threw);
 
     threw = false;
     try { db.knnSearchOptimized(query, 1, Metric::MANHATTAN); }
-    catch (const std::invalid_argument&) { threw = true; }
+    catch (const invalid_argument&) { threw = true; }
     assert(threw);
 
-    std::cout << "TEST 5 PASSED: dimension mismatch throws std::invalid_argument\n";
+    cout << "TEST 5 PASSED: dimension mismatch throws invalid_argument\n";
 }
 
 // -------------------------------------------------------
@@ -219,7 +221,7 @@ static void test6_euclidean_behavior_unchanged()
     db.insert(VectorRecord(2, {3.0f, 0.0f}, "a"));   // dist = 3
     db.insert(VectorRecord(3, {2.0f, 0.0f}, "a"));   // dist = 2
 
-    std::vector<float> query = {0.0f, 0.0f};
+    vector<float> query = {0.0f, 0.0f};
 
     auto results = db.knnSearch(query, 3, Metric::EUCLIDEAN);
     assert(results.size() == 3);
@@ -232,7 +234,7 @@ static void test6_euclidean_behavior_unchanged()
     for (size_t i = 1; i < results.size(); i++)
         assert(results[i].score >= results[i - 1].score);
 
-    std::cout << "TEST 6 PASSED: EUCLIDEAN behavior unchanged after adding MANHATTAN\n";
+    cout << "TEST 6 PASSED: EUCLIDEAN behavior unchanged after adding MANHATTAN\n";
 }
 
 // -------------------------------------------------------
@@ -249,7 +251,7 @@ static void test7_cosine_behavior_unchanged()
     db.insert(VectorRecord(1, {1.0f, 0.0f}, "a"));
     db.insert(VectorRecord(2, {0.0f, 1.0f}, "a"));
 
-    std::vector<float> query = {1.0f, 0.0f};
+    vector<float> query = {1.0f, 0.0f};
 
     auto results = db.knnSearch(query, 2, Metric::COSINE);
     assert(results.size() == 2);
@@ -258,7 +260,7 @@ static void test7_cosine_behavior_unchanged()
     assert(results[0].score >= results[1].score);
     assert(results[0].record.id == 1);
 
-    std::cout << "TEST 7 PASSED: COSINE behavior unchanged after adding MANHATTAN\n";
+    cout << "TEST 7 PASSED: COSINE behavior unchanged after adding MANHATTAN\n";
 }
 
 // -------------------------------------------------------
@@ -274,6 +276,6 @@ int main()
     test6_euclidean_behavior_unchanged();
     test7_cosine_behavior_unchanged();
 
-    std::cout << "\nAll Manhattan metric tests passed.\n";
+    cout << "\nAll Manhattan metric tests passed.\n";
     return 0;
 }

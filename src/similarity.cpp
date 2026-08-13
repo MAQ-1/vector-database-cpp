@@ -61,7 +61,7 @@ double Similarity::manhattanDistance(
     for (size_t i = 0; i < a.size(); i++)
     {
         // Add the absolute difference of the current dimension.
-        sum += std::abs(a[i] - b[i]);
+        sum += abs(a[i] - b[i]);
     }
 
     // Return the total Manhattan distance.

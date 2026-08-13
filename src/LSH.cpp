@@ -3,7 +3,9 @@
 #include "Similarity.h"
 #include <algorithm>
 
-int LSH::hash(const std::vector<float>& embedding)
+using namespace std;
+
+int LSH::hash(const vector<float>& embedding)
 {
     // Compute the sum of all dimensions.
     float sum = 0.0f;
@@ -31,33 +33,33 @@ void LSH::insert(const VectorRecord& record)
 
 void LSH::display() const
 {
-    std::cout << "\n===== LSH Buckets =====\n";
+    cout << "\n===== LSH Buckets =====\n";
 
     // Traverse every bucket in the hash table.
     for (const auto& bucket : buckets)
     {
-        std::cout << "Bucket " << bucket.first << std::endl;
+        cout << "Bucket " << bucket.first << endl;
 
         // Traverse every record inside the bucket.
         for (const auto& record : bucket.second)
         {
-            std::cout << "  ID: " << record.id
+            cout << "  ID: " << record.id
                       << "  Metadata: " << record.metadata
-                      << std::endl;
+                      << endl;
         }
 
-        std::cout << "------------------------\n";
+        cout << "------------------------\n";
     }
 }
 
-VectorRecord LSH::search(const std::vector<float>& query){
+VectorRecord LSH::search(const vector<float>& query){
     // compute the bucket number for the query vector
     int bucket = hash(query);
 
     // check the bucket in hashmap
 
     if(buckets.find(bucket)==buckets.end()){
-      throw std::runtime_error("No records found in the corresponding bucket.");
+      throw runtime_error("No records found in the corresponding bucket.");
     } 
 
     // Get all vectors inside the bucket.

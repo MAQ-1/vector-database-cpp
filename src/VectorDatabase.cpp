@@ -12,6 +12,8 @@
 #include <chrono>
 #include <random>
 
+using namespace std;
+
 void VectorDatabase::insert(const VectorRecord &record)
 {
     records.emplace_back(record);
@@ -26,23 +28,23 @@ void VectorDatabase::insert(const VectorRecord &record)
 // display all records in the database
 void VectorDatabase::display() const
 {
-    std::cout << "\n===== Vector Database =====\n";
+    cout << "\n===== Vector Database =====\n";
 
     for (const auto &record : records)
     {
-        std::cout << "ID: " << record.id << std::endl;
+        cout << "ID: " << record.id << endl;
 
-        std::cout << "Embedding: ";
+        cout << "Embedding: ";
 
         for (float value : record.embedding)
         {
-            std::cout << value << " ";
+            cout << value << " ";
         }
 
-        std::cout << std::endl;
+        cout << endl;
 
-        std::cout << "Metadata: " << record.metadata << std::endl;
-        std::cout << "------------------------" << std::endl;
+        cout << "Metadata: " << record.metadata << endl;
+        cout << "------------------------" << endl;
     }
 }
 
@@ -63,7 +65,7 @@ void VectorDatabase::remove(int id)
 {
     // Remove from the records vector
     records.erase(
-        std::remove_if(
+        remove_if(
             records.begin(),
             records.end(),
             [id](const VectorRecord &record)
@@ -82,7 +84,7 @@ void VectorDatabase::remove(int id)
     hnsw.remove(id);
 }
 
-VectorRecord VectorDatabase::search(const std::vector<float> &query,
+VectorRecord VectorDatabase::search(const vector<float> &query,
                                     SearchAlgorithm algorithm)
 
 {
@@ -93,7 +95,7 @@ VectorRecord VectorDatabase::search(const std::vector<float> &query,
         auto result = knnSearch(query, 1, Metric::EUCLIDEAN);
         if (result.empty())
         {
-            throw std::runtime_error("No records found in the database.");
+            throw runtime_error("No records found in the database.");
         }
 
         return result[0].record;
@@ -115,18 +117,18 @@ VectorRecord VectorDatabase::search(const std::vector<float> &query,
     }
 
     default:
-        throw std::invalid_argument("Unsupported search algorithm.");
+        throw invalid_argument("Unsupported search algorithm.");
     }
 }
 
 // save the database to a file sirf read krega
-void VectorDatabase::saveToFile(const std::string &filename) const
+void VectorDatabase::saveToFile(const string &filename) const
 {
-    std::ofstream file(filename);
+    ofstream file(filename);
 
     if (!file.is_open())
     {
-        throw std::runtime_error("Unable to open file for writing.");
+        throw runtime_error("Unable to open file for writing.");
     }
 
     for (const auto &record : records)
@@ -148,45 +150,45 @@ void VectorDatabase::saveToFile(const std::string &filename) const
 }
 
 // load the file
-void VectorDatabase::loadFromFile(const std::string &filename)
+void VectorDatabase::loadFromFile(const string &filename)
 {
-    std::ifstream file(filename);
+    ifstream file(filename);
 
     if (!file.is_open())
     {
-        throw std::runtime_error("Unable to open file for reading.");
+        throw runtime_error("Unable to open file for reading.");
     }
 
     // Clear existing records
     clear();
 
-    std::string line;
+    string line;
 
-    while (std::getline(file, line))
+    while (getline(file, line))
     {
-        std::stringstream ss(line);
+        stringstream ss(line);
 
-        std::string idStr;
-        std::string embeddingStr;
-        std::string metadata;
+        string idStr;
+        string embeddingStr;
+        string metadata;
 
         // Split the line
-        std::getline(ss, idStr, '|');
-        std::getline(ss, embeddingStr, '|');
-        std::getline(ss, metadata);
+        getline(ss, idStr, '|');
+        getline(ss, embeddingStr, '|');
+        getline(ss, metadata);
 
         // Convert ID
-        int id = std::stoi(idStr);
+        int id = stoi(idStr);
 
         // Parse embedding
-        std::vector<float> embedding;
-        std::stringstream embeddingStream(embeddingStr);
+        vector<float> embedding;
+        stringstream embeddingStream(embeddingStr);
 
-        std::string value;
+        string value;
 
-        while (std::getline(embeddingStream, value, ','))
+        while (getline(embeddingStream, value, ','))
         {
-            embedding.push_back(std::stof(value));
+            embedding.push_back(stof(value));
         }
 
         // Create record
@@ -200,14 +202,14 @@ void VectorDatabase::loadFromFile(const std::string &filename)
 }
 // KNN representation with sort
 
-std::vector<SearchResult> VectorDatabase::knnSearch(
-    const std::vector<float> &query,
+vector<SearchResult> VectorDatabase::knnSearch(
+    const vector<float> &query,
     int k,
     Metric metric,
-    const std::string &metadataFilter)
+    const string &metadataFilter)
 {
     // Stores every record along with its score.
-    std::vector<SearchResult> scoredRecords;
+    vector<SearchResult> scoredRecords;
 
     // Calculate score for every record.
     for (const auto &record : records)
@@ -240,7 +242,7 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
             break;
 
         default:
-            throw std::invalid_argument("Unsupported metric.");
+            throw invalid_argument("Unsupported metric.");
         }
 
         scoredRecords.push_back({record, score});
@@ -251,7 +253,7 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
     // COSINE and DOT_PRODUCT are similarity metrics: larger score is better.
     if (metric == Metric::EUCLIDEAN || metric == Metric::MANHATTAN)
     {
-        std::sort(
+        sort(
             scoredRecords.begin(),
             scoredRecords.end(),
             [](const SearchResult &a, const SearchResult &b)
@@ -261,7 +263,7 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
     }
     else
     {
-        std::sort(
+        sort(
             scoredRecords.begin(),
             scoredRecords.end(),
             [](const SearchResult &a, const SearchResult &b)
@@ -271,7 +273,7 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
     }
 
     // Keep only the Top-K results.
-    std::vector<SearchResult> result;
+    vector<SearchResult> result;
 
     for (int i = 0;
          i < k && i < static_cast<int>(scoredRecords.size());
@@ -285,11 +287,11 @@ std::vector<SearchResult> VectorDatabase::knnSearch(
 
 // KNN search implementation with heap
 
-std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
-    const std::vector<float> &query,
+vector<SearchResult> VectorDatabase::knnSearchOptimized(
+    const vector<float> &query,
     int k,
     Metric metric,
-    const std::string &metadataFilter)
+    const string &metadataFilter)
 {
     // For distance metrics (EUCLIDEAN, MANHATTAN), smaller score is better.
     // We must keep the K smallest distances seen so far.
@@ -320,8 +322,8 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
         }
     };
 
-    std::priority_queue<SearchResult, std::vector<SearchResult>, MaxHeap> distHeap;
-    std::priority_queue<SearchResult, std::vector<SearchResult>, CompareSearchResult> simHeap;
+    priority_queue<SearchResult, vector<SearchResult>, MaxHeap> distHeap;
+    priority_queue<SearchResult, vector<SearchResult>, CompareSearchResult> simHeap;
 
     // Traverse every record in the database.
     for (const auto &record : records)
@@ -356,7 +358,7 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
             break;
 
         default:
-            throw std::invalid_argument("Unsupported metric.");
+            throw invalid_argument("Unsupported metric.");
         }
 
         SearchResult current{record, score};
@@ -393,7 +395,7 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
         }
     }
 
-    std::vector<SearchResult> result;
+    vector<SearchResult> result;
 
     if (isDistanceMetric)
     {
@@ -404,7 +406,7 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
             distHeap.pop();
         }
         // Drain order: largest → smallest. Reverse for smallest → largest.
-        std::reverse(result.begin(), result.end());
+        reverse(result.begin(), result.end());
     }
     else
     {
@@ -415,7 +417,7 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
             simHeap.pop();
         }
         // Drain order: smallest → largest. Reverse for largest → smallest.
-        std::reverse(result.begin(), result.end());
+        reverse(result.begin(), result.end());
     }
 
     return result;
@@ -423,7 +425,7 @@ std::vector<SearchResult> VectorDatabase::knnSearchOptimized(
 
 // BenchMark
 Benchmark VectorDatabase::benchmark(
-    const std::vector<float> &query)
+    const vector<float> &query)
 {
     Benchmark result;
 
@@ -432,75 +434,75 @@ Benchmark VectorDatabase::benchmark(
     // ----------------------------
     // Brute Force
     // ----------------------------
-    auto start = std::chrono::high_resolution_clock::now();
+    auto start = chrono::high_resolution_clock::now();
 
     for (int i = 0; i < ITERATIONS; i++)
     {
         search(query, SearchAlgorithm::BRUTE_FORCE);
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
+    auto end = chrono::high_resolution_clock::now();
 
     result.bruteForceTime =
-        std::chrono::duration<double, std::micro>(
+        chrono::duration<double, std::micro>(
             end - start)
             .count() / ITERATIONS;
 
     // ----------------------------
     // KD-Tree
     // ----------------------------
-    start = std::chrono::high_resolution_clock::now();
+    start = chrono::high_resolution_clock::now();
 
     for (int i = 0; i < ITERATIONS; i++)
     {
         search(query, SearchAlgorithm::KD_TREE);
     }
 
-    end = std::chrono::high_resolution_clock::now();
+    end = chrono::high_resolution_clock::now();
 
     result.kdTreeTime =
-        std::chrono::duration<double, std::micro>(
+        chrono::duration<double, std::micro>(
             end - start)
             .count() / ITERATIONS;
 
     // ----------------------------
     // LSH
     // ----------------------------
-    start = std::chrono::high_resolution_clock::now();
+    start = chrono::high_resolution_clock::now();
 
     for (int i = 0; i < ITERATIONS; i++)
     {
         search(query, SearchAlgorithm::LSH);
     }
 
-    end = std::chrono::high_resolution_clock::now();
+    end = chrono::high_resolution_clock::now();
 
     result.lshTime =
-        std::chrono::duration<double, std::micro>(
+        chrono::duration<double, std::micro>(
             end - start)
             .count() / ITERATIONS;
 
     // ----------------------------
     // HNSW
     // ----------------------------
-    start = std::chrono::high_resolution_clock::now();
+    start = chrono::high_resolution_clock::now();
 
     for (int i = 0; i < ITERATIONS; i++)
     {
         search(query, SearchAlgorithm::HNSW);
     }
 
-    end = std::chrono::high_resolution_clock::now();
+    end = chrono::high_resolution_clock::now();
 
     result.hnswTime =
-        std::chrono::duration<double, std::micro>(
+        chrono::duration<double, std::micro>(
             end - start)
             .count() / ITERATIONS;
 
     return result;
 }
 
-const std::vector<VectorRecord>& VectorDatabase::getRecords() const
+const vector<VectorRecord>& VectorDatabase::getRecords() const
 {
     return records;
 }

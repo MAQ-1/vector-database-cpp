@@ -45,6 +45,11 @@ public:
     const std::vector<float>& query
 );
 
+std::vector<VectorRecord> knnSearch(
+    const std::vector<float>& query,
+    int k
+);
+
 void remove(int id);
 
     int nodeCount() const;
