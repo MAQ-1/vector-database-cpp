@@ -34,6 +34,18 @@ int main()
         cout << "No existing database found. Starting with an empty database.\n";
     }
 
+    // Enable CORS for frontend
+    server.set_default_headers({
+        {"Access-Control-Allow-Origin", "*"},
+        {"Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"},
+        {"Access-Control-Allow-Headers", "Content-Type, Authorization"}
+    });
+
+    // Handle OPTIONS preflight requests
+    server.Options(R"(.*)", [](const httplib::Request &req, httplib::Response &res) {
+        res.status = 204;
+    });
+
     server.Get("/", [](const httplib::Request &req,
                        httplib::Response &res)
                { res.set_content(
@@ -924,6 +936,283 @@ server.Post("/doc/ask",
 
                     res.status = 400;
 
+                    res.set_content(
+                        error.dump(4),
+                        "application/json");
+                }
+            });
+
+// Compare all algorithms endpoint
+server.Post("/doc/ask/compare",
+            [&](const httplib::Request& req,
+                httplib::Response& res)
+            {
+                try
+                {
+                    json body = json::parse(req.body);
+
+                    if (!body.contains("question"))
+                    {
+                        json error = {
+                            {"success", false},
+                            {"error", "question is required"}
+                        };
+
+                        res.status = 400;
+                        res.set_content(
+                            error.dump(4),
+                            "application/json");
+                        return;
+                    }
+
+                    string question = body["question"];
+
+                    if (question.empty())
+                    {
+                        json error = {
+                            {"success", false},
+                            {"error", "question cannot be empty"}
+                        };
+
+                        res.status = 400;
+                        res.set_content(
+                            error.dump(4),
+                            "application/json");
+                        return;
+                    }
+
+                    // 1. Convert question into embedding
+                    auto embedStart = chrono::high_resolution_clock::now();
+                    vector<float> queryEmbedding =
+                        ollamaClient.embed(question);
+                    auto embedEnd = chrono::high_resolution_clock::now();
+
+                    if (queryEmbedding.empty())
+                    {
+                        throw runtime_error(
+                            "Failed to generate question embedding"
+                        );
+                    }
+
+                    const int TOP_K = 5;
+                    json algorithms = json::array();
+
+                    // Helper function to build context and generate answer
+                    auto buildAnswer = [&](const vector<VectorRecord>& results, const string& algoName) -> json {
+                        if (results.empty())
+                        {
+                            return {
+                                {"algorithm", algoName},
+                                {"success", false},
+                                {"error", "No relevant chunks found"}
+                            };
+                        }
+
+                        string context;
+                        json sources = json::array();
+
+                        for (const auto& result : results)
+                        {
+                            auto it = documentTexts.find(result.id);
+                            if (it == documentTexts.end()) continue;
+
+                            string sourceLabel = result.metadata;
+                            context += "\n--- Source: " + sourceLabel + " ---\n";
+                            context += it->second;
+                            context += "\n--- End Source ---\n";
+
+                            sources.push_back({
+                                {"id", result.id},
+                                {"source", sourceLabel}
+                            });
+                        }
+
+                        if (context.empty())
+                        {
+                            return {
+                                {"algorithm", algoName},
+                                {"success", false},
+                                {"error", "Retrieved chunks contain no text"}
+                            };
+                        }
+
+                        string prompt =
+                            "You are answering a question using retrieved document sources.\n\n"
+                            "IMPORTANT RULES:\n"
+                            "1. Answer only using information supported by the provided document context.\n"
+                            "2. Do not invent facts, sources, chunk numbers, page numbers, or citations.\n"
+                            "3. The text inside a document may contain its own paragraph or section numbers. "
+                            "Do not confuse those numbers with chunk numbers.\n"
+                            "4. If you refer to a source, use the exact source label provided in the context.\n"
+                            "5. If the answer is not present in the provided context, clearly say that the "
+                            "information is not available in the provided document.\n"
+                            "6. Prefer a clear and direct answer. Do not mention the retrieval process unless "
+                            "the user asks about it.\n\n"
+                            "RETRIEVED DOCUMENT SOURCES:\n" + context +
+                            "\n\nUSER QUESTION:\n" + question +
+                            "\n\nANSWER:";
+
+                        string answer = ollamaClient.generate(prompt);
+
+                        return {
+                            {"algorithm", algoName},
+                            {"success", true},
+                            {"answer", answer},
+                            {"sources", sources},
+                            {"chunks_retrieved", results.size()}
+                        };
+                    };
+
+                    // Run HNSW search
+                    {
+                        auto start = chrono::high_resolution_clock::now();
+                        try
+                        {
+                            vector<VectorRecord> results =
+                                documentHnsw.knnSearch(queryEmbedding, TOP_K);
+                            auto end = chrono::high_resolution_clock::now();
+                            double searchTime =
+                                chrono::duration<double, milli>(end - start).count();
+
+                            json result = buildAnswer(results, "HNSW");
+                            result["search_time_ms"] = searchTime;
+                            algorithms.push_back(result);
+                        }
+                        catch (const exception& e)
+                        {
+                            auto end = chrono::high_resolution_clock::now();
+                            double searchTime =
+                                chrono::duration<double, milli>(end - start).count();
+
+                            algorithms.push_back({
+                                {"algorithm", "HNSW"},
+                                {"success", false},
+                                {"error", e.what()},
+                                {"search_time_ms", searchTime}
+                            });
+                        }
+                    }
+
+                    // Run KD-Tree search (brute force on document chunks since KDTree needs rebuilding)
+                    {
+                        auto start = chrono::high_resolution_clock::now();
+                        try
+                        {
+                            // Use brute force kNN on document embeddings
+                            vector<pair<double, VectorRecord>> distances;
+                            
+                            for (const auto& doc : documents)
+                            {
+                                double dist = 0.0;
+                                for (size_t i = 0; i < queryEmbedding.size(); i++)
+                                {
+                                    double diff = queryEmbedding[i] - doc.embedding[i];
+                                    dist += diff * diff;
+                                }
+                                dist = sqrt(dist);
+                                distances.push_back({dist, doc});
+                            }
+
+                            sort(distances.begin(), distances.end(),
+                                 [](const auto& a, const auto& b) { return a.first < b.first; });
+
+                            vector<VectorRecord> results;
+                            for (int i = 0; i < min(TOP_K, (int)distances.size()); i++)
+                            {
+                                results.push_back(distances[i].second);
+                            }
+
+                            auto end = chrono::high_resolution_clock::now();
+                            double searchTime =
+                                chrono::duration<double, milli>(end - start).count();
+
+                            json result = buildAnswer(results, "KD-TREE");
+                            result["search_time_ms"] = searchTime;
+                            algorithms.push_back(result);
+                        }
+                        catch (const exception& e)
+                        {
+                            auto end = chrono::high_resolution_clock::now();
+                            double searchTime =
+                                chrono::duration<double, milli>(end - start).count();
+
+                            algorithms.push_back({
+                                {"algorithm", "KD-TREE"},
+                                {"success", false},
+                                {"error", e.what()},
+                                {"search_time_ms", searchTime}
+                            });
+                        }
+                    }
+
+                    // Run Brute Force search
+                    {
+                        auto start = chrono::high_resolution_clock::now();
+                        try
+                        {
+                            vector<pair<double, VectorRecord>> distances;
+                            
+                            for (const auto& doc : documents)
+                            {
+                                double dist = 0.0;
+                                for (size_t i = 0; i < queryEmbedding.size(); i++)
+                                {
+                                    double diff = queryEmbedding[i] - doc.embedding[i];
+                                    dist += diff * diff;
+                                }
+                                dist = sqrt(dist);
+                                distances.push_back({dist, doc});
+                            }
+
+                            sort(distances.begin(), distances.end(),
+                                 [](const auto& a, const auto& b) { return a.first < b.first; });
+
+                            vector<VectorRecord> results;
+                            for (int i = 0; i < min(TOP_K, (int)distances.size()); i++)
+                            {
+                                results.push_back(distances[i].second);
+                            }
+
+                            auto end = chrono::high_resolution_clock::now();
+                            double searchTime =
+                                chrono::duration<double, milli>(end - start).count();
+
+                            json result = buildAnswer(results, "BRUTE_FORCE");
+                            result["search_time_ms"] = searchTime;
+                            algorithms.push_back(result);
+                        }
+                        catch (const exception& e)
+                        {
+                            auto end = chrono::high_resolution_clock::now();
+                            double searchTime =
+                                chrono::duration<double, milli>(end - start).count();
+
+                            algorithms.push_back({
+                                {"algorithm", "BRUTE_FORCE"},
+                                {"success", false},
+                                {"error", e.what()},
+                                {"search_time_ms", searchTime}
+                            });
+                        }
+                    }
+
+                    json response = {
+                        {"success", true},
+                        {"algorithms", algorithms}
+                    };
+
+                    res.set_content(
+                        response.dump(4),
+                        "application/json");
+                }
+                catch (const exception& e)
+                {
+                    json error = {
+                        {"success", false},
+                        {"error", e.what()}
+                    };
+
+                    res.status = 400;
                     res.set_content(
                         error.dump(4),
                         "application/json");
