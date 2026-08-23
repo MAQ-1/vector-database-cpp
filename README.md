@@ -310,6 +310,4 @@ Both are vendored under `external/`. No package manager required.
 
 ---
 
-## License
 
-To be decided.
