@@ -20,7 +20,7 @@
 ## 🖥️ Project Interface
 
 <div align="center">
-  <img src="./assets/output.png" alt="VectorDB Web Interface" width="100%" />
+  <img src="image/output.png" alt="VectorDB Web Interface" width="100%" />
 </div>
 
 <br />
