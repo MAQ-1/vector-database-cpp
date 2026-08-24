@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     cmake \
     libpoppler-cpp-dev \
+    libssl-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
@@ -44,8 +45,10 @@ COPY backend/src/ ./src/
 COPY backend/main.cpp ./
 
 RUN g++ -std=c++17 -O2 \
+    -DCPPHTTPLIB_OPENSSL_SUPPORT \
     -I include \
     -I external \
+    -I /usr/include/poppler/cpp \
     main.cpp \
     src/VectorDatabase.cpp \
     src/VectorRecord.cpp \
@@ -57,6 +60,8 @@ RUN g++ -std=c++17 -O2 \
     src/DocumentIngestion.cpp \
     src/PdfExtractor.cpp \
     -lpoppler-cpp \
+    -lssl \
+    -lcrypto \
     -o VectorDB
 
 # Stage 3: Runtime with Caddy
@@ -73,6 +78,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     libpoppler-cpp0v5 \
+    libssl3 \
     bash \
     gnupg \
     && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
