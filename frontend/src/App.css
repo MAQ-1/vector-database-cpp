@@ -10,28 +10,28 @@
   --bg-primary: #000000;
   --bg-secondary: #0a0a0a;
   --panel: #0f0f0f;
-  --raised: #1a1a1a;
+  --raised: #121212;
   --input-bg: #050505;
 
-  --text-primary: #e6e1d8;
-  --text-secondary: #a7b0bd;
-  --text-muted: #718096;
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
 
-  --border: #1f1f1f;
-  --border-strong: #2a2a2a;
+  --border: #27272a;
+  --border-strong: #3f3f46;
 
-  --success: #55d68b;
-  --error: #ff5c5c;
-  --processing: #ffd166;
+  --success: #10b981;
+  --error: #ef4444;
+  --processing: #3b82f6;
 
-  --brute-force: #ff9f43;
-  --brute-force-hover: #ffb45e;
-  --kd-tree: #56c2ff;
-  --hnsw: #ff5d8f;
-  --fastest: #ffd166;
+  --brute-force: #3b82f6;
+  --brute-force-hover: #60a5fa;
+  --kd-tree: #8b5cf6;
+  --hnsw: #ec4899;
+  --fastest: #10b981;
 
-  --accent: #e89b3c;
-  --accent-hover: #f2ad55;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
 
   --grid-color: #ffffff;
   --grid-opacity: 0.02;

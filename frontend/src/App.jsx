@@ -50,7 +50,7 @@ function App() {
 
   // Backend status
   const [backendOnline, setBackendOnline] = useState(false);
-  const [ollamaOnline, setOllamaOnline] = useState(false);
+  const [aiOnline, setAiOnline] = useState(false);
 
   // Document state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -115,11 +115,11 @@ function App() {
       if (data) {
         // Support both field names for compatibility
         const aiStatus = data.ai_service || data.ollama;
-        setOllamaOnline(aiStatus === 'ONLINE');
+        setAiOnline(aiStatus === 'ONLINE');
       }
     } catch (error) {
       setBackendOnline(false);
-      setOllamaOnline(false);
+      setAiOnline(false);
       console.error('[FRONTEND] Backend check failed:', error);
     }
   };
@@ -595,8 +595,8 @@ function App() {
                 <span className="text-[var(--text-secondary)] text-xs">Backend: {backendOnline ? 'Online' : 'Offline'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`w-3 h-3 border border-current ${ollamaOnline ? 'bg-[var(--success)] border-[var(--success)]' : 'bg-[var(--error)] border-[var(--error)]'}`}></span>
-                <span className="text-[var(--text-secondary)] text-xs">Ollama: {ollamaOnline ? 'Online' : 'Offline'}</span>
+                <span className={`w-3 h-3 border border-current ${aiOnline ? 'bg-[var(--success)] border-[var(--success)]' : 'bg-[var(--error)] border-[var(--error)]'}`}></span>
+                <span className="text-[var(--text-secondary)] text-xs">AI: {aiOnline ? 'Online' : 'Offline'}</span>
               </div>
             </div>
 
@@ -874,7 +874,7 @@ function App() {
         {/* Footer */}
         <footer className="app-footer font-mono">
           <p>PDF → Text → Chunks → Embeddings → Vector Search → AI Answer</p>
-          <p className="mt-1">Powered by C++ • Custom HNSW • Ollama • Semantic Search</p>
+          <p className="mt-1">Powered by C++ • Custom HNSW • AI Embeddings • Semantic Search</p>
         </footer>
       </div>
     </div>
