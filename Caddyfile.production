@@ -1,6 +1,6 @@
 {
     # Global options
-    email tanmay@example.com
+    email tanmay.kumar@proton.me
 }
 
 # Production configuration with automatic HTTPS

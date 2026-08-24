@@ -109,10 +109,46 @@ RUN chown -R appuser:appuser /app && \
 # Create startup script to run both backend and Caddy
 RUN echo '#!/bin/bash' > /start.sh && \
     echo 'set -e' >> /start.sh && \
-    echo 'echo "Starting VectorDB Backend..."' >> /start.sh && \
-    echo 'su -c "cd /app && ./VectorDB &" appuser' >> /start.sh && \
-    echo 'echo "Starting Caddy..."' >> /start.sh && \
-    echo 'caddy run --config /etc/caddy/Caddyfile --adapter caddyfile' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Print environment (without secrets)' >> /start.sh && \
+    echo 'echo "=== Environment Check ==="' >> /start.sh && \
+    echo 'echo "AICREDITS_BASE_URL: ${AICREDITS_BASE_URL}"' >> /start.sh && \
+    echo 'echo "AICREDITS_MODEL: ${AICREDITS_MODEL}"' >> /start.sh && \
+    echo 'echo "AICREDITS_EMBEDDING_MODEL: ${AICREDITS_EMBEDDING_MODEL}"' >> /start.sh && \
+    echo 'echo "API_KEY Set: $([ -n \"$AICREDITS_API_KEY\" ] && echo \"YES\" || echo \"NO\")"' >> /start.sh && \
+    echo 'echo ""' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Start backend' >> /start.sh && \
+    echo 'echo "=== Starting VectorDB Backend on port 8080 ==="' >> /start.sh && \
+    echo 'cd /app' >> /start.sh && \
+    echo 'su -c "./VectorDB" appuser > /tmp/backend.log 2>&1 &' >> /start.sh && \
+    echo 'BACKEND_PID=$!' >> /start.sh && \
+    echo 'echo "Backend PID: $BACKEND_PID"' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Wait for backend to start' >> /start.sh && \
+    echo 'echo "Waiting for backend to start..."' >> /start.sh && \
+    echo 'for i in {1..30}; do' >> /start.sh && \
+    echo '    if curl -s http://localhost:8080/ > /dev/null 2>&1; then' >> /start.sh && \
+    echo '        echo "Backend is UP!"' >> /start.sh && \
+    echo '        break' >> /start.sh && \
+    echo '    fi' >> /start.sh && \
+    echo '    if ! kill -0 $BACKEND_PID 2>/dev/null; then' >> /start.sh && \
+    echo '        echo "ERROR: Backend process died!"' >> /start.sh && \
+    echo '        echo "=== Backend Logs ==="' >> /start.sh && \
+    echo '        cat /tmp/backend.log' >> /start.sh && \
+    echo '        exit 1' >> /start.sh && \
+    echo '    fi' >> /start.sh && \
+    echo '    echo "  Attempt $i/30..."' >> /start.sh && \
+    echo '    sleep 1' >> /start.sh && \
+    echo 'done' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Tail backend logs in background' >> /start.sh && \
+    echo 'tail -f /tmp/backend.log &' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Start Caddy' >> /start.sh && \
+    echo 'echo ""' >> /start.sh && \
+    echo 'echo "=== Starting Caddy ==="' >> /start.sh && \
+    echo 'exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile' >> /start.sh && \
     chmod +x /start.sh
 
 # Expose ports

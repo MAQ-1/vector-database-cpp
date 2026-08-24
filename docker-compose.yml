@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-yourusername}/vectordb:latest
+    image: ghcr.io/maq-1/vectordb:latest
     container_name: vectordb
     restart: unless-stopped
     ports:

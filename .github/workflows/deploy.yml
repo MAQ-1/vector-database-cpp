@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/vectordb
+  IMAGE_NAME: maq-1/vectordb
 
 jobs:
   build-and-push:
@@ -73,7 +73,7 @@ jobs:
             
             services:
               vectordb:
-                image: ghcr.io/${{ github.repository_owner }}/vectordb:latest
+                image: ghcr.io/maq-1/vectordb:latest
                 container_name: vectordb
                 restart: unless-stopped
                 ports:
