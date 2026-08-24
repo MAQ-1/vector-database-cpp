@@ -412,6 +412,7 @@ int main()
         json response = {
             {"success", true},
             {"ai_service", "ONLINE"},
+            {"ollama", "ONLINE"},
             {"embedding_dimension", embedding.size()}
         };
 
@@ -421,6 +422,7 @@ int main()
     {
         json response = {
             {"success", false},
+            {"ai_service", "OFFLINE"},
             {"ollama", "OFFLINE"},
             {"error", e.what()}
         };

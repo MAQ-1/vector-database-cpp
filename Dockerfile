@@ -121,7 +121,7 @@ RUN echo '#!/bin/bash' > /start.sh && \
     echo '# Start backend' >> /start.sh && \
     echo 'echo "=== Starting VectorDB Backend on port 8080 ==="' >> /start.sh && \
     echo 'cd /app' >> /start.sh && \
-    echo 'su -c "./VectorDB" appuser > /tmp/backend.log 2>&1 &' >> /start.sh && \
+    echo 'su -p -c "./VectorDB" appuser > /tmp/backend.log 2>&1 &' >> /start.sh && \
     echo 'BACKEND_PID=$!' >> /start.sh && \
     echo 'echo "Backend PID: $BACKEND_PID"' >> /start.sh && \
     echo '' >> /start.sh && \

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  vectordb:
+    image: ghcr.io/maq-1/vectordb:latest
+    container_name: vectordb
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      - AICREDITS_API_KEY=${AICREDITS_API_KEY}
+      - AICREDITS_BASE_URL=api.aicredits.in
+      - AICREDITS_MODEL=gpt-4o-mini
+      - AICREDITS_EMBEDDING_MODEL=text-embedding-3-small
+      - DOMAIN=vector.tanmaykuamar.me
+    volumes:
+      - vectordb-data:/app/data
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  vectordb-data:
+  caddy-data:
+  caddy-config:

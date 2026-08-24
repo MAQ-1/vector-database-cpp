@@ -104,10 +104,18 @@ function App() {
   const checkBackendStatus = async () => {
     try {
       const response = await fetch(API.status, { method: 'GET' });
-      const data = await response.json();
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (parseErr) {
+        console.warn('[FRONTEND] Backend returned non-JSON response:', text.substring(0, 200));
+      }
       setBackendOnline(response.ok);
-      if (data && data.ollama) {
-        setOllamaOnline(data.ollama === 'ONLINE');
+      if (data) {
+        // Support both field names for compatibility
+        const aiStatus = data.ai_service || data.ollama;
+        setOllamaOnline(aiStatus === 'ONLINE');
       }
     } catch (error) {
       setBackendOnline(false);
@@ -198,15 +206,21 @@ function App() {
         body: formData,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
-        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+      const responseText = await response.text();
+      let data = null;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch (parseErr) {
+        console.warn('[FRONTEND] Upload response non-JSON:', responseText.substring(0, 200));
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        const errorMsg = (data && data.error) || `Upload failed (HTTP ${response.status})`;
+        throw new Error(errorMsg);
+      }
 
-      if (!data.success) {
-        throw new Error(data.error || 'Upload failed');
+      if (!data || !data.success) {
+        throw new Error((data && data.error) || 'Upload failed');
       }
 
       updatePipelineStep('upload', 'completed');
@@ -303,12 +317,18 @@ function App() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to get answer' }));
-        throw new Error(errorData.error || 'Failed to get answer');
+      const responseText = await response.text();
+      let data = null;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch (parseErr) {
+        console.warn('[FRONTEND] Ask response non-JSON:', responseText.substring(0, 200));
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        const errorMsg = (data && data.error) || `Failed to get answer (HTTP ${response.status})`;
+        throw new Error(errorMsg);
+      }
 
       if (!data || typeof data !== 'object') {
         throw new Error('Invalid response format from server');
