@@ -1,7 +1,6 @@
 # ============================================
-# OPTION 1: ALL-IN-ONE CONTAINER
+# ALL-IN-ONE CONTAINER
 # Backend + Frontend + Caddy in one image
-# Simpler but less flexible
 # ============================================
 
 # Stage 1: Build React Frontend
