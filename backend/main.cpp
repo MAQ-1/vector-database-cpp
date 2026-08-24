@@ -427,7 +427,7 @@ int main()
             {"error", e.what()}
         };
 
-        res.status = 500;
+        res.status = 200;
         res.set_content(response.dump(2), "application/json");
     } });
 
