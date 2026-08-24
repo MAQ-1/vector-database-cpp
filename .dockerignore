@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+
+# Environment
+.env
+.env.*
+
+# Node modules (will be installed in build)
+node_modules
+frontend/node_modules
+
+# Build artifacts
+frontend/dist
+backend/*.exe
+backend/*.o
+*.exe
+*.o
+
+# Test files
+backend/test
+*.pdf
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files
+vectors.txt
+*.db
+*.bin
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github
+
+# Deployment docs
+DEPLOY.md
+DEPLOYMENT-SUMMARY.md

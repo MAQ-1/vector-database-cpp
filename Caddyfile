@@ -1,0 +1,33 @@
+{
+    # Global options
+    admin off
+}
+
+# Main site configuration
+:80 {
+    # API routes - proxy to backend running on localhost:8080
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy localhost:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Frontend - serve static files with SPA fallback
+    handle {
+        root * /srv
+        encode gzip
+        try_files {path} /index.html
+        file_server
+    }
+
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+}
+

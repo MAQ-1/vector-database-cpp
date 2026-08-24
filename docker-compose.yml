@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  vectordb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-yourusername}/vectordb:latest
+    container_name: vectordb
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - AICREDITS_API_KEY=${AICREDITS_API_KEY}
+      - AICREDITS_BASE_URL=${AICREDITS_BASE_URL:-api.aicredits.in}
+      - AICREDITS_MODEL=${AICREDITS_MODEL:-gpt-4o-mini}
+      - AICREDITS_EMBEDDING_MODEL=${AICREDITS_EMBEDDING_MODEL:-text-embedding-3-small}
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - vectordb-data:/app/data
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  vectordb-data:
+    driver: local
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local

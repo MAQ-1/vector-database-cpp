@@ -1,4 +1,11 @@
 # =========================
+# Documentation (exclude all except README)
+# =========================
+
+*.md
+!README.md
+
+# =========================
 # Build / Executables
 # =========================
 

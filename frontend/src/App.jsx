@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const API = {
   status: `${API_BASE_URL}/status`,
   upload: `${API_BASE_URL}/doc/upload`,

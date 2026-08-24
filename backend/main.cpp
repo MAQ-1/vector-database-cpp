@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <sstream>
 #include "httplib.h"
@@ -406,12 +407,11 @@ int main()
                {
     try
     {
-        auto embedding = ollamaClient.embed("test");
+       auto embedding = ollamaClient.embed("test");
 
         json response = {
             {"success", true},
-            {"ollama", "ONLINE"},
-            {"model", "nomic-embed-text"},
+            {"ai_service", "ONLINE"},
             {"embedding_dimension", embedding.size()}
         };
 
