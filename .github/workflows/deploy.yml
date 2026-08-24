@@ -1,4 +1,4 @@
-name: Build and Push to GHCR
+name: Build, Push and Deploy
 
 on:
   push:
@@ -47,4 +47,78 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Image digest
-        run: echo "Image pushed successfully - ${{ steps.meta.outputs.digest }}"
+        run: echo "Image pushed - ${{ steps.meta.outputs.digest }}"
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to VM
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VM_ADDRESS }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            # Navigate to app directory
+            cd ~/vectordb || mkdir -p ~/vectordb && cd ~/vectordb
+            
+            # Create docker-compose.yml if not exists
+            cat > docker-compose.yml <<'EOF'
+            version: '3.8'
+            
+            services:
+              vectordb:
+                image: ghcr.io/${{ github.repository_owner }}/vectordb:latest
+                container_name: vectordb
+                restart: unless-stopped
+                ports:
+                  - "8080:80"
+                environment:
+                  - AICREDITS_API_KEY=${{ secrets.AICREDITS_API_KEY }}
+                  - AICREDITS_BASE_URL=api.aicredits.in
+                  - AICREDITS_MODEL=gpt-4o-mini
+                  - AICREDITS_EMBEDDING_MODEL=text-embedding-3-small
+                  - DOMAIN=vector.tanmaykuamar.me
+                volumes:
+                  - vectordb-data:/app/data
+                  - caddy-data:/data
+                  - caddy-config:/config
+                healthcheck:
+                  test: ["CMD", "curl", "-f", "http://localhost/api/status"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 40s
+            
+            volumes:
+              vectordb-data:
+              caddy-data:
+              caddy-config:
+            EOF
+            
+            # Login to GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Pull latest image
+            docker-compose pull
+            
+            # Stop old container
+            docker-compose down
+            
+            # Start new container
+            docker-compose up -d
+            
+            # Wait for health check
+            echo "Waiting for container to be healthy..."
+            sleep 10
+            
+            # Show status
+            docker-compose ps
+            
+            # Test health endpoint
+            curl -f http://localhost:8080/api/status || echo "Health check pending..."

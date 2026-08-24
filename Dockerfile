@@ -81,8 +81,8 @@ COPY --from=backend-builder /app/VectorDB /app/VectorDB
 # Copy frontend build to Caddy serve directory
 COPY --from=frontend-builder /app/frontend/dist /srv
 
-# Copy Caddyfile
-COPY Caddyfile /etc/caddy/Caddyfile
+# Copy production Caddyfile
+COPY Caddyfile.production /etc/caddy/Caddyfile
 
 # Set permissions
 RUN chown -R appuser:appuser /app && \

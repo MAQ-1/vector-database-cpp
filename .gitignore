@@ -1,6 +1,7 @@
 # =========================
 # Documentation (exclude all except README)
 # =========================
+private*
 
 *.md
 !README.md
