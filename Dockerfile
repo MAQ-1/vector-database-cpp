@@ -8,18 +8,27 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
+# Copy package files
 COPY frontend/package*.json ./
-RUN npm ci --production=false
 
+# Install dependencies with increased timeout and retry
+RUN npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm ci --production=false --prefer-offline --no-audit
+
+# Copy source code
 COPY frontend/ ./
+
+# Build for production
 RUN npm run build
 
 # Stage 2: Build C++ Backend
 FROM ubuntu:22.04 AS backend-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_PRIORITY=critical
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     make \
     cmake \
@@ -54,9 +63,10 @@ RUN g++ -std=c++17 -O2 \
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_PRIORITY=critical
 
-# Install Caddy
-RUN apt-get update && apt-get install -y \
+# Install Caddy and runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     debian-keyring \
     debian-archive-keyring \
     apt-transport-https \
@@ -64,10 +74,11 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libpoppler-cpp0v5 \
     bash \
+    gnupg \
     && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
     && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list \
     && apt-get update \
-    && apt-get install -y caddy \
+    && apt-get install -y --no-install-recommends caddy \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app user
